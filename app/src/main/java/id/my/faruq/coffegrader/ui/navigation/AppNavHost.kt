@@ -38,8 +38,12 @@ fun AppNavHost(
                     navController.navigate(Routes.HOME) {
                         popUpTo(Routes.HOME) { inclusive = true }
                     }
+                },
+                onOpenHistoryDetail = { scanId ->
+                    navController.navigate("${Routes.HISTORY_DETAIL}/$scanId")
                 }
             )
+
         }
 
         composable(Routes.CAMERA) { CameraScreen(

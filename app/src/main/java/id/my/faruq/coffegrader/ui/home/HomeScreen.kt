@@ -41,8 +41,8 @@ fun HomeScreen(
     onGoToCamera: () -> Unit,
     onGoToHistory: () -> Unit,
     onGoToAbout: () -> Unit,
-    onRefreshHome: () -> Unit
-) {
+    onRefreshHome: () -> Unit,
+    onOpenHistoryDetail: (String) -> Unit) {
     // Dummy data untuk carousel (siap diganti dari DB)
     val dummyHistory = remember {
         listOf(
@@ -134,8 +134,14 @@ fun HomeScreen(
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 items(dummyHistory) { item ->
-                    HistoryCarouselCard(item = item)
+                    HistoryCarouselCard(
+                        item = item,
+                        onClick = {
+                            onOpenHistoryDetail(item.id)
+                        }
+                    )
                 }
+
             }
 
             // (Optional) Section lain sesuai mockup kamu
@@ -199,9 +205,14 @@ private fun ScanBigButton(
     }
 }
 
+
 @Composable
-private fun HistoryCarouselCard(item: ScanHistoryItem) {
+private fun HistoryCarouselCard(
+    item: ScanHistoryItem,
+    onClick: () -> Unit
+) {
     Card(
+        onClick = onClick, // ⬅️ INI KUNCINYA
         modifier = Modifier.width(165.dp),
         shape = RoundedCornerShape(14.dp)
     ) {
@@ -214,7 +225,6 @@ private fun HistoryCarouselCard(item: ScanHistoryItem) {
                     .background(Color.Black.copy(alpha = 0.08f))
             )
 
-            // Info panel bawah (warna bisa kamu sesuaikan per grade)
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -227,7 +237,6 @@ private fun HistoryCarouselCard(item: ScanHistoryItem) {
                         color = Color.White,
                         fontWeight = FontWeight.Bold
                     )
-                    Spacer(Modifier.height(4.dp))
                     Text(
                         text = item.dateTimeText,
                         color = Color.White,
@@ -235,7 +244,6 @@ private fun HistoryCarouselCard(item: ScanHistoryItem) {
                     )
                 }
 
-                // grade bulat kanan bawah
                 Box(
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
@@ -254,6 +262,7 @@ private fun HistoryCarouselCard(item: ScanHistoryItem) {
         }
     }
 }
+
 
 @Composable
 private fun HomeBottomBar(
