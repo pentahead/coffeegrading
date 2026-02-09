@@ -5,12 +5,15 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -167,14 +170,41 @@ fun HistoryDetailScreen(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.Center
                     ) {
-                        AssistChip(
-                            onClick = {},
-                            label = { Text(detail.timeText) }
+                        val chipColors = AssistChipDefaults.assistChipColors(
+                            disabledLabelColor = MaterialTheme.colorScheme.onSurface,
+                            disabledLeadingIconContentColor = MaterialTheme.colorScheme.primary,
+                            disabledContainerColor = Color.Transparent
                         )
-                        Spacer(Modifier.width(8.dp))
+                        // Chip untuk Jam
                         AssistChip(
                             onClick = {},
-                            label = { Text(detail.dateText) }
+                            enabled = false,
+                            colors = chipColors,
+                            label = { Text(detail.timeText) },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.AccessTime,
+                                    contentDescription = "Time Icon",
+                                    modifier = Modifier.size(AssistChipDefaults.IconSize)
+                                )
+                            }
+                        )
+
+                        Spacer(Modifier.width(8.dp))
+
+                        // Chip untuk Kalender
+                        AssistChip(
+                            onClick = {},
+                            enabled = false,
+                            colors = chipColors,
+                            label = { Text(detail.dateText) },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.CalendarMonth,
+                                    contentDescription = "Date Icon",
+                                    modifier = Modifier.size(AssistChipDefaults.IconSize)
+                                )
+                            }
                         )
                     }
 
@@ -183,7 +213,8 @@ fun HistoryDetailScreen(
                     // 4) Kiri gambar (clickable zoom) & kanan mutu (lingkaran)
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(14.dp),
                     ) {
                         // Image placeholder (nanti ganti thumbnail dari file/db)
                         Box(

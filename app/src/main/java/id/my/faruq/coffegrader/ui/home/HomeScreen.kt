@@ -53,17 +53,7 @@ fun HomeScreen(
     }
 
     Scaffold(
-        topBar = {
-            // Top bar kecil + tombol menu/about (sesuai mockup: 1 tombol menu ke about)
-            CenterAlignedTopAppBar(
-                title = { Text("Smart Bean Grading") },
-                actions = {
-                    IconButton(onClick = onGoToAbout) {
-                        Icon(Icons.Filled.Info, contentDescription = "About")
-                    }
-                }
-            )
-        },
+
         bottomBar = {
             HomeBottomBar(
                 onHome = onRefreshHome,
@@ -82,35 +72,52 @@ fun HomeScreen(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(180.dp)
+                    .height(210.dp)
                     .background(Color(0xFFB7F23A))
-                    .padding(16.dp)
+                    .padding(top =  20.dp, end = 16.dp, start = 16.dp, bottom = 0.dp)
             ) {
-                Column(
-                    modifier = Modifier.align(Alignment.TopStart)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .align(Alignment.TopStart),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = "Smart Bean Grading",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        text = "Powered by real-time AI",
-                        style = MaterialTheme.typography.bodyMedium
-                    )
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Smart Bean Grading",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "Powered by real-time AI",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+
+                    IconButton(
+                        onClick = onGoToAbout,
+                        modifier = Modifier.size(24.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Info,
+                            contentDescription = "About",
+                            tint = Color.Black
+                        )
+                    }
                 }
 
-                // Placeholder gambar di kanan (nanti ganti Image painterResource)
                 Image(
                     painter = painterResource(R.drawable.bgilustrasi),
                     contentDescription = "Header Illustration",
                     modifier = Modifier
-                        .align(Alignment.CenterEnd)
-                        .size(110.dp),
+                        .align(Alignment.BottomEnd)
+                        .size(180.dp)
+                        .padding(top = 20.dp, end = 20.dp, bottom = 0.dp),
                     contentScale = ContentScale.Fit
                 )
             }
+
 
             // ===== Scan button panel =====
             Spacer(Modifier.height(12.dp))
@@ -173,7 +180,7 @@ private fun ScanBigButton(
             modifier = Modifier.fillMaxSize(),
             contentAlignment = Alignment.Center
         ) {
-            // tombol lingkaran besar “SCAN”
+            // tombol “SCAN”
             Box(
                 modifier = Modifier
                     .size(120.dp)
@@ -212,7 +219,7 @@ private fun HistoryCarouselCard(
     onClick: () -> Unit
 ) {
     Card(
-        onClick = onClick, // ⬅️ INI KUNCINYA
+        onClick = onClick,
         modifier = Modifier.width(165.dp),
         shape = RoundedCornerShape(14.dp)
     ) {
@@ -273,51 +280,67 @@ private fun HomeBottomBar(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(14.dp),
-        contentAlignment = Alignment.Center
+            .padding(horizontal = 16.dp, vertical = 20.dp),
+        contentAlignment = Alignment.BottomCenter
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .height(70.dp)
                 .clip(RoundedCornerShape(28.dp))
-                .background(Color.White)
-                .padding(horizontal = 22.dp, vertical = 10.dp),
-            horizontalArrangement = Arrangement.spacedBy(34.dp),
+                .background(Color.White),
+            horizontalArrangement = Arrangement.SpaceAround,
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(
                 modifier = Modifier.weight(1f),
-                horizontalAlignment = Alignment.CenterHorizontally) {
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
                 IconButton(onClick = onHome) {
                     Icon(Icons.Filled.Home, contentDescription = "Beranda")
                 }
                 Text("Beranda", style = MaterialTheme.typography.labelSmall)
             }
+            Spacer(modifier = Modifier.weight(1f))
 
-            // tombol scan
-            Box(
-                modifier = Modifier.weight(1f),
-                contentAlignment = Alignment.Center
-            ) {
-                IconButton(
-                    onClick = onScan,
-                    modifier = Modifier
-                        .size(56.dp)
-                        .clip(CircleShape)
-                        .background(Color(0xFFB7F23A))
-                ) {
-                    Icon(Icons.Filled.CenterFocusStrong, contentDescription = "Scan")
-                }
-            }
 
             Column(
                 modifier = Modifier.weight(1f),
-                horizontalAlignment = Alignment.CenterHorizontally) {
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
                 IconButton(onClick = onHistory) {
                     Icon(Icons.Filled.Description, contentDescription = "Riwayat")
                 }
                 Text("Riwayat", style = MaterialTheme.typography.labelSmall)
             }
+
         }
+        Box(
+            modifier = Modifier
+                .offset(y = (-25).dp),
+            contentAlignment = Alignment.Center
+        ) {
+            IconButton(
+                onClick = onScan,
+                modifier = Modifier
+                    .size(80.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xFFB7F23A))
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.CenterFocusStrong,
+                    contentDescription = "Scan",
+                    modifier = Modifier.size(40.dp),
+                    tint = Color.Black
+                )
+            }
+
+        }
+        Text(
+            text = "Scan",
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.Bold,
+            color = Color.Black
+        )
     }
 }

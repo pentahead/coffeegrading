@@ -218,15 +218,16 @@ private fun BottomNavBar(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(14.dp),
-        contentAlignment = Alignment.Center
+            .padding(horizontal = 16.dp, vertical = 20.dp),
+        contentAlignment = Alignment.BottomCenter
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .height(70.dp)
                 .clip(RoundedCornerShape(28.dp))
-                .background(Color.White)
-                .padding(vertical = 10.dp),
+                .background(Color.White),
+            horizontalArrangement = Arrangement.SpaceAround,
             verticalAlignment = Alignment.CenterVertically
         ) {
             // Item Beranda
@@ -239,22 +240,8 @@ private fun BottomNavBar(
                 }
                 Text("Beranda", style = MaterialTheme.typography.labelSmall)
             }
+            Spacer(modifier = Modifier.weight(1f))
 
-            // Item Scan
-            Box(
-                modifier = Modifier.weight(1f),
-                contentAlignment = Alignment.Center
-            ) {
-                IconButton(
-                    onClick = onScan,
-                    modifier = Modifier
-                        .size(56.dp)
-                        .clip(CircleShape)
-                        .background(Color(0xFFB7F23A))
-                ) {
-                    Icon(Icons.Filled.CenterFocusStrong, contentDescription = "Scan")
-                }
-            }
 
             // Item Riwayat
             Column(
@@ -267,6 +254,34 @@ private fun BottomNavBar(
                 Text("Riwayat", style = MaterialTheme.typography.labelSmall)
             }
         }
+        Box(
+            modifier = Modifier
+                .offset(y = (-25).dp),
+            contentAlignment = Alignment.Center
+        ) {
+            IconButton(
+                onClick = onScan,
+                modifier = Modifier
+                    .size(80.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xFFB7F23A))
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.CenterFocusStrong,
+                    contentDescription = "Scan",
+                    modifier = Modifier.size(40.dp),
+                    tint = Color.Black
+                )
+            }
+
+        }
+        Text(
+            text = "Scan",
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.Bold,
+            color = Color.Black
+        )
+    }
     }
 
-}
+

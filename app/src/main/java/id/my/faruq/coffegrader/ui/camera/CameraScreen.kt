@@ -175,97 +175,13 @@ fun CameraScreen(
 
 
     Scaffold(
-        bottomBar = {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Row(
-                    modifier = Modifier
-                        .background(
-                            Color.White,
-                            shape = RoundedCornerShape(32.dp)
-                        )
-                        .padding(horizontal = 24.dp, vertical = 12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(32.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
 
-                    IconButton(onClick =  onNavigateToHome ) {
-                        Icon(Icons.Default.Home, contentDescription = "Beranda")
-                    }
-
-                    IconButton(
-                        onClick = { capturePhotoToBitmap(
-                        context = context,
-                        imageCapture = imageCapture,
-                        onBitmapReady = { bmp ->
-                            capturedBitmap = bmp
-                        }
-                    )},
-                        modifier = Modifier
-                            .size(56.dp)
-                            .background(
-                                Color(0xFF7CFF00),
-                                shape = CircleShape
-                            )
-                    ) {
-                        Icon(Icons.Default.Camera, contentDescription = "Capture")
-                    }
-
-                    if (hasFlash) {
-                        IconButton(onClick = { toggleFlash() }) {
-                            Icon(
-                                imageVector = if (isFlashOn)
-                                    Icons.Filled.FlashOn
-                                else
-                                    Icons.Filled.FlashOff,
-                                contentDescription = "Flash"
-                            )
-                        }
-                    }
-
-
-                }
-            }
-        }
-//
-//                topBar = {
-//            CenterAlignedTopAppBar(
-//                title = { Text("Coffee Grader") },
-//                actions = {
-//                    IconButton(onClick = onNavigateToHistory) {
-//                        Icon(Icons.Filled.List, contentDescription = "History")
-//                    }
-//                    IconButton(onClick = onNavigateToAbout) {
-//                        Icon(Icons.Filled.Info, contentDescription = "About")
-//                    }
-//                }
-//            )
-//        },
-//        floatingActionButton = {
-//            FloatingActionButton(
-//                onClick = {
-//                    capturePhotoToBitmap(
-//                        context = context,
-//                        imageCapture = imageCapture,
-//                        onBitmapReady = { bmp ->
-//                            capturedBitmap = bmp
-//                        }
-//                    )
-//                }
-//            ) {
-//                Icon(Icons.Filled.Camera, contentDescription = "Scan")
-//            }
-//        }
     ) { padding ->
 
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)
+
         ) {
             if (hasCameraPermission) {
 
@@ -400,7 +316,7 @@ fun CameraScreen(
                     label = "waveOffset"
                 )
 
-                // (Nanti di sini kita tambahkan wave animation layer)
+                // ( wave animation layer)
                 Box(
                     modifier = Modifier
                         .fillMaxWidth(gridSizeFraction)
@@ -426,7 +342,55 @@ fun CameraScreen(
                 )
             }
         }
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(bottom = 32.dp, start = 20.dp, end = 20.dp),
+            contentAlignment = Alignment.BottomCenter
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(
+                        Color.White.copy(alpha = 0.9f), // Beri sedikit transparansi agar estetik
+                        shape = RoundedCornerShape(50.dp)
+                    )
+                    .padding(horizontal = 24.dp, vertical = 12.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(onClick = onNavigateToHome) {
+                    Icon(Icons.Default.Home, contentDescription = "Beranda")
+                }
 
+                IconButton(
+                    onClick = {
+                        capturePhotoToBitmap(
+                            context = context,
+                            imageCapture = imageCapture,
+                            onBitmapReady = { bmp -> capturedBitmap = bmp }
+                        )
+                    },
+                    modifier = Modifier
+                        .size(64.dp)
+                        .background(Color(0xFF7CFF00), shape = CircleShape)
+                ) {
+                    Icon(Icons.Default.Camera, contentDescription = "Capture")
+                }
+
+                if (hasFlash) {
+                    IconButton(onClick = { toggleFlash() }) {
+                        Icon(
+                            imageVector = if (isFlashOn) Icons.Filled.FlashOn else Icons.Filled.FlashOff,
+                            contentDescription = "Flash"
+                        )
+                    }
+                } else {
+                    Spacer(modifier = Modifier.size(48.dp))
+                }
+            }
+        }
+    }
 
         //  Overlay preview Bitmap (sementara)
             capturedBitmap?.let { bmp ->
@@ -454,7 +418,7 @@ fun CameraScreen(
                 }
             }
         }
-    }
+
 
 
 private fun capturePhotoToBitmap(

@@ -42,7 +42,33 @@ fun AboutScreen(
                 .padding(padding)
                 .padding(16.dp)
         ) {
-            Text("Coffee Grader\n\nPanduan \n\n Dhiyaul Faruq")
+            Text("Tentang CoffeeGrader\n" +
+                    "CoffeeGrader adalah aplikasi bantu penilaian mutu green beans kopi robusta berbasis pengolahan citra. Aplikasi ini membantu pengguna melakukan pemindaian, menampilkan hasil deteksi/segmentasi cacat, serta menyimpan riwayat pemeriksaan untuk dokumentasi quality control.\n" +
+                    "\n" +
+                    "Fitur Utama\n" +
+                    "\n" +
+                    "Pemindaian dan analisis biji kopi secara cepat\n" +
+                    "\n" +
+                    "Ringkasan hasil: jumlah/proporsi cacat dan skor mutu (jika diaktifkan)\n" +
+                    "\n" +
+                    "Riwayat scan: detail hasil per ID pemeriksaan\n" +
+                    "\n" +
+                    "Berjalan secara offline pada perangkat yang didukung (tergantung konfigurasi)\n" +
+                    "\n" +
+                    "Catatan Penting\n" +
+                    "Hasil dari aplikasi bersifat assistive (pendukung). Keputusan akhir penilaian mutu tetap mengikuti prosedur QC dan standar yang berlaku.\n" +
+                    "\n" +
+                    "Informasi Aplikasi\n" +
+                    "\n" +
+                    "Nama: CoffeeGrader\n" +
+                    "\n" +
+                    "Platform: Android\n" +
+                    "\n" +
+                    "Minimum: Android 10 (API 29)\n" +
+                    "\n" +
+                    "Pengembang: (Isi nama/kampusmu)\n" +
+                    "\n" +
+                    "Kontak: (Isi email/WA)")
         }
     }
 }
