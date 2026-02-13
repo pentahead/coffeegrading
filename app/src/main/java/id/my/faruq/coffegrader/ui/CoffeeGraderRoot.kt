@@ -6,7 +6,7 @@ import androidx.compose.runtime.Composable
 import id.my.faruq.coffegrader.ui.navigation.AppNavHost
 
 @Composable
-fun CoffeeGraderApp() {
+fun CoffeeGraderRoot() {
     MaterialTheme {
         Surface {
             AppNavHost()

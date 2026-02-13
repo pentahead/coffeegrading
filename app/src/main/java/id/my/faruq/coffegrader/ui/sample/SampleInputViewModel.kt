@@ -15,23 +15,91 @@ class SampleInputViewModel(
     private val _uiState = MutableStateFlow(SampleInputState())
     val uiState = _uiState.asStateFlow()
 
-    fun updateBatchId(value: String) {
-        _uiState.value = _uiState.value.copy(batchId = value)
+    // ================= UPDATE FIELD =================
+
+    fun updateBatchId(v: String) {
+        _uiState.value = _uiState.value.copy(batchId = v)
     }
+
+    fun updateCoffeeType(v: String) {
+        _uiState.value = _uiState.value.copy(coffeeType = v)
+    }
+
+    fun updateProcessing(v: String) {
+        // ukuran reset otomatis
+        val defaultSize = if (v == "Wet") "Sedang" else "Besar"
+        _uiState.value = _uiState.value.copy(
+            processingMethod = v,
+            beanSize = defaultSize
+        )
+    }
+
+    fun updateBeanSize(v: String) {
+        _uiState.value = _uiState.value.copy(beanSize = v)
+    }
+
+    fun updateBeanShape(v: String) {
+        _uiState.value = _uiState.value.copy(beanShape = v)
+    }
+
+    fun updateSortation(v: String) {
+        _uiState.value = _uiState.value.copy(sortationType = v)
+    }
+
+    fun toggleInsect(v: Boolean) {
+        _uiState.value = _uiState.value.copy(hasInsect = v)
+    }
+
+    fun toggleMold(v: Boolean) {
+        _uiState.value = _uiState.value.copy(hasMoldSmell = v)
+    }
+
+    fun updateMoisture(v: String) {
+        _uiState.value = _uiState.value.copy(moisture = v)
+    }
+
+    fun updateDirt(v: String) {
+        _uiState.value = _uiState.value.copy(dirt = v)
+    }
+
+    // ================= VALIDASI SNI =================
+
+    fun isFormValid(): Boolean {
+        val s = _uiState.value
+
+        val moistureVal = s.moisture.toFloatOrNull()
+        val dirtVal = s.dirt.toFloatOrNull()
+
+        return s.batchId.isNotBlank()
+                && moistureVal != null
+                && dirtVal != null
+                && moistureVal <= 12.5f   // SNI max
+                && dirtVal <= 0.5f        // SNI max
+    }
+
+    // ================= SAVE =================
 
     fun saveSample(onSuccess: (Long) -> Unit) {
         viewModelScope.launch {
+
+            val s = _uiState.value
+            val moistureVal = s.moisture.toFloatOrNull() ?: 0f
+            val dirtVal = s.dirt.toFloatOrNull() ?: 0f
+
             val sample = SampleInfoEntity(
-                batchId = _uiState.value.batchId,
-                coffeeType = "Robusta",
-                processingMethod = "Dry",
-                beanSize = "Besar",
-                beanShape = "Normal",
-                hasInsect = false,
-                hasMoldSmell = false,
-                moistureContent = 0f,
-                dirtContent = 0f,
-                sortationType = "Primer"
+                batchId = s.batchId,
+                coffeeType = s.coffeeType,
+                processingMethod = s.processingMethod,
+                beanSize = s.beanSize,
+                beanShape = s.beanShape,
+
+                hasInsect = s.hasInsect,
+                hasMoldSmell = s.hasMoldSmell,
+
+                moistureContent = moistureVal,
+                dirtContent = dirtVal,
+
+                sortationType = s.sortationType
             )
 
             val id = repository.saveSample(sample)

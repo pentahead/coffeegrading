@@ -1,0 +1,29 @@
+package id.my.faruq.coffegrader.data.local.entity
+
+import androidx.room.Entity
+import androidx.room.PrimaryKey
+
+@Entity(tableName = "scan_history")
+data class ScanHistoryEntity(
+
+    @PrimaryKey(autoGenerate = true)
+    val id: Long = 0,
+
+    // Nama batch / kode sampel
+    val batchName: String,
+
+    // Waktu scan
+    val dateTime: String,
+
+    // Total biji terdeteksi
+    val totalBeans: Int,
+
+    // Total nilai cacat
+    val defectScore: Int,
+
+    // Mutu hasil grading (1,2,3,4a,...)
+    val gradeText: String,
+
+    // Thumbnail path optional
+    val thumbnailPath: String? = null
+)

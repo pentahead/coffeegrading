@@ -12,15 +12,17 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import id.my.faruq.coffegrader.ui.theme.CoffeeGraderTheme
-import id.my.faruq.coffegrader.ui.CoffeeGraderApp
+import id.my.faruq.coffegrader.ui.CoffeeGraderRoot
+import dagger.hilt.android.AndroidEntryPoint
 
+@AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
             CoffeeGraderTheme {
-                CoffeeGraderApp()
+                CoffeeGraderRoot()
 //                Scaffold( modifier = Modifier.fillMaxSize() ) { innerPadding ->
 //                    Greeting(
 //                        name = "Android",

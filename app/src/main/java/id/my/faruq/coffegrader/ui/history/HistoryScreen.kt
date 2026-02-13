@@ -21,6 +21,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.hilt.navigation.compose.hiltViewModel
+
 
 data class HistoryItemUi(
     val id: String,
@@ -46,30 +49,45 @@ private enum class MutuFilter(val label: String) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HistoryScreen(
+    vm: HistoryViewModel = hiltViewModel(),
     onOpenDetail: (String) -> Unit,
     onGoHome: () -> Unit,
     onGoScan: () -> Unit,
     onGoHistoryRefresh: () -> Unit,
     onGoAbout: () -> Unit
 ) {
-    // Dummy list (nanti ganti dari Room)
-    val allItems = remember {
-        listOf(
-            HistoryItemUi("SCAN_001","SCAN_001","08:15:22 / 2025-11-30",132,11,"1", Color(0xFF12A150)),
-            HistoryItemUi("SCAN_002","SCAN_002","08:16:15 / 2025-11-30",132,11,"4a", Color(0xFFF57C00)),
-            HistoryItemUi("SCAN_003","SCAN_003","08:18:42 / 2025-11-30",128,92,"5", Color(0xFF8E1B1B)),
-            HistoryItemUi("SCAN_004","SCAN_004","08:20:29 / 2025-11-30",132,33,"3", Color(0xFFB45F06)),
-            HistoryItemUi("SCAN_005","SCAN_005","08:40:00 / 2025-11-30",132,33,"3", Color(0xFFB45F06)),
-        )
-    }
+    // ✅ Data dari Room (Entity)
+    val entities by vm.historyList.collectAsState(initial = emptyList())
 
+    // ✅ Filter state
     var selectedFilter by remember { mutableStateOf(MutuFilter.Semua) }
 
-    val shownItems = remember(selectedFilter, allItems) {
-        if (selectedFilter == MutuFilter.Semua) allItems
-        else {
+    // ✅ Convert Entity -> UI Model
+    val uiItems = remember(entities) {
+        entities.map { e ->
+            HistoryItemUi(
+                id = e.id.toString(),
+                batchName = e.batchName,
+                dateTimeText = e.dateTime,
+                totalBeans = e.totalBeans,
+                defectScore = e.defectScore,
+                gradeText = e.gradeText,
+                cardColor = when (e.gradeText.lowercase()) {
+                    "1" -> Color(0xFF12A150)
+                    "4a" -> Color(0xFFF57C00)
+                    else -> Color(0xFF8E1B1B)
+                }
+            )
+        }
+    }
+
+    // ✅ Apply filter
+    val shownItems = remember(selectedFilter, uiItems) {
+        if (selectedFilter == MutuFilter.Semua) {
+            uiItems
+        } else {
             val grade = selectedFilter.label.removePrefix("Mutu ").lowercase()
-            allItems.filter { it.gradeText.lowercase() == grade }
+            uiItems.filter { it.gradeText.lowercase() == grade }
         }
     }
 

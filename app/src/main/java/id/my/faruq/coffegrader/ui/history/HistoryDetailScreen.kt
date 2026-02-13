@@ -5,15 +5,14 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.CalendarMonth
-import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -25,83 +24,50 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
-
-
-// ===== Data model UI (nanti ganti dari Room) =====
-data class DefectRowUi(
-    val no: Int,
-    val defectName: String,
-    val defectScore: Float, // nilai cacat per biji/kejadian
-    val count: Int,         // jumlah biji
-    val totalScore: Float   // total nilai cacat
-)
-
-data class HistoryDetailUi(
-    val id: String,
-    val batchName: String,
-    val timeText: String,    // "08:15:22"
-    val dateText: String,    // "30-11-2025"
-    val gradeText: String,   // "1" / "4a"
-    val themeColor: Color,   // warna sesuai card
-    val totalBeans: Int,
-    val defectiveBeans: Int,
-    val defectScoreTotal: Float,
-    val dominantDefect: String,
-    val scanDurationMs: Int,
-    val officerName: String,
-    val defects: List<DefectRowUi>
-)
+import id.my.faruq.coffegrader.data.repository.DefectRowUi
+import id.my.faruq.coffegrader.data.repository.HistoryDetailUi
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HistoryDetailScreen(
     scanId: String,
+    vm: HistoryDetailViewModel,
     onBack: () -> Unit
 ) {
-    // ===== Dummy fetch berdasarkan scanId (nanti ganti dari DB) =====
-    val detail = remember(scanId) {
-        // contoh mapping warna berdasarkan grade/ID
-        val color = when (scanId) {
-            "SCAN_001" -> Color(0xFF12A150)
-            "SCAN_002" -> Color(0xFFF57C00)
-            "SCAN_003" -> Color(0xFF8E1B1B)
-            else -> Color(0xFF12A150)
-        }
+    // ===== ambil data asli dari ViewModel =====
+    val defects by vm.defects.collectAsState()
+    val detail by vm.detail.collectAsState()
 
-        HistoryDetailUi(
-            id = scanId,
-            batchName = scanId,
-            timeText = "08:15:22",
-            dateText = "30-11-2025",
-            gradeText = when (scanId) { "SCAN_002" -> "4a" else -> "1" },
-            themeColor = color,
-            totalBeans = 132,
-            defectiveBeans = 13,
-            defectScoreTotal = 11f,
-            dominantDefect = "Biji Hitam",
-            scanDurationMs = 232,
-            officerName = "Mulyadi",
-            defects = listOf(
-                DefectRowUi(1, "Biji Hitam", 1f, 9, 9f),
-                DefectRowUi(2, "Biji Hitam Sebagian", 0.5f, 2, 1f),
-                DefectRowUi(3, "Kulit Kopi Ukuran Sedang", 0.5f, 2, 1f),
-            )
-        )
+    // ===== load data sekali =====
+    LaunchedEffect(scanId) {
+        vm.load(scanId.toLong())
     }
 
-    // ===== State untuk edit nama & zoom gambar =====
-    var currentBatchName by remember { mutableStateOf(detail.batchName) }
+    // ===== kalau detail belum ada, tampilkan loading =====
+    if (detail == null) {
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            CircularProgressIndicator()
+        }
+        return
+    }
+
+    // ===== sudah aman karena detail != null =====
+    val safeDetail = detail!!
+
+    // ===== State edit batch name =====
+    var currentBatchName by remember { mutableStateOf(safeDetail.batchName) }
     var showEditDialog by remember { mutableStateOf(false) }
     var editText by remember { mutableStateOf(currentBatchName) }
 
     var showImageZoom by remember { mutableStateOf(false) }
 
-    // ===== Scroll =====
     val scroll = rememberScrollState()
 
     Scaffold(
         topBar = {
-            // Atas mirip riwayat: title kiri, menu kanan (kalau mau)
             TopAppBar(
                 title = { Text("Riwayat", fontWeight = FontWeight.Bold) }
             )
@@ -116,7 +82,6 @@ fun HistoryDetailScreen(
                 .padding(horizontal = 16.dp, vertical = 12.dp)
         ) {
 
-            // 1) Tombol kembali (ke History)
             TextButton(
                 onClick = onBack,
                 contentPadding = PaddingValues(0.dp)
@@ -128,12 +93,11 @@ fun HistoryDetailScreen(
 
             Spacer(Modifier.height(10.dp))
 
-            // 2) Kotak utama dengan border warna sesuai item
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(18.dp),
                 colors = CardDefaults.cardColors(containerColor = Color.White),
-                border = BorderStroke(2.dp, detail.themeColor)
+                border = BorderStroke(2.dp, safeDetail.themeColor)
             ) {
                 Column(
                     modifier = Modifier
@@ -141,7 +105,7 @@ fun HistoryDetailScreen(
                         .padding(14.dp)
                 ) {
 
-                    // 3) Judul batch editable + waktu & tanggal
+                    // ===== Batch Name =====
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
@@ -152,7 +116,9 @@ fun HistoryDetailScreen(
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold
                         )
+
                         Spacer(Modifier.width(6.dp))
+
                         IconButton(
                             onClick = {
                                 editText = currentBatchName
@@ -166,6 +132,7 @@ fun HistoryDetailScreen(
 
                     Spacer(Modifier.height(6.dp))
 
+                    // ===== Time & Date =====
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.Center
@@ -175,12 +142,12 @@ fun HistoryDetailScreen(
                             disabledLeadingIconContentColor = MaterialTheme.colorScheme.primary,
                             disabledContainerColor = Color.Transparent
                         )
-                        // Chip untuk Jam
+
                         AssistChip(
                             onClick = {},
                             enabled = false,
                             colors = chipColors,
-                            label = { Text(detail.timeText) },
+                            label = { Text(safeDetail.timeText) },
                             leadingIcon = {
                                 Icon(
                                     imageVector = Icons.Default.AccessTime,
@@ -192,12 +159,11 @@ fun HistoryDetailScreen(
 
                         Spacer(Modifier.width(8.dp))
 
-                        // Chip untuk Kalender
                         AssistChip(
                             onClick = {},
                             enabled = false,
                             colors = chipColors,
-                            label = { Text(detail.dateText) },
+                            label = { Text(safeDetail.dateText) },
                             leadingIcon = {
                                 Icon(
                                     imageVector = Icons.Default.CalendarMonth,
@@ -210,13 +176,13 @@ fun HistoryDetailScreen(
 
                     Spacer(Modifier.height(16.dp))
 
-                    // 4) Kiri gambar (clickable zoom) & kanan mutu (lingkaran)
+                    // ===== Image + Grade Circle =====
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(14.dp),
                     ) {
-                        // Image placeholder (nanti ganti thumbnail dari file/db)
+
                         Box(
                             modifier = Modifier
                                 .size(150.dp)
@@ -228,19 +194,17 @@ fun HistoryDetailScreen(
                             Text("Foto", color = Color.Black.copy(alpha = 0.55f))
                         }
 
-                        Spacer(Modifier.width(14.dp))
-
                         Box(
                             modifier = Modifier
                                 .size(140.dp)
                                 .clip(CircleShape)
-                                .background(detail.themeColor),
+                                .background(safeDetail.themeColor),
                             contentAlignment = Alignment.Center
                         ) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Text("Mutu", color = Color.White)
                                 Text(
-                                    detail.gradeText,
+                                    safeDetail.gradeText,
                                     color = Color.White,
                                     style = MaterialTheme.typography.displaySmall,
                                     fontWeight = FontWeight.ExtraBold
@@ -251,12 +215,13 @@ fun HistoryDetailScreen(
 
                     Spacer(Modifier.height(16.dp))
 
-                    // 5) Detail Informasi
+                    // ===== Detail Informasi =====
                     Text(
                         "Detail Informasi",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold
                     )
+
                     Spacer(Modifier.height(8.dp))
 
                     Card(
@@ -270,29 +235,30 @@ fun HistoryDetailScreen(
                             verticalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             InfoRow("Batch ID", currentBatchName)
-                            InfoRow("Waktu", "${detail.timeText} WIB")
-                            InfoRow("Tanggal", detail.dateText)
-                            InfoRow("Mutu Biji", "Mutu ${detail.gradeText}")
-                            InfoRow("Total Biji", detail.totalBeans.toString())
-                            InfoRow("Jumlah Biji Cacat", detail.defectiveBeans.toString())
-                            InfoRow("Nilai Cacat", detail.defectScoreTotal.toString())
-                            InfoRow("Cacat Dominan", detail.dominantDefect)
-                            InfoRow("Durasi Scan", "${detail.scanDurationMs} ms")
-                            InfoRow("Petugas", detail.officerName)
+                            InfoRow("Waktu", "${safeDetail.timeText} WIB")
+                            InfoRow("Tanggal", safeDetail.dateText)
+                            InfoRow("Mutu Biji", "Mutu ${safeDetail.gradeText}")
+                            InfoRow("Total Biji", safeDetail.totalBeans.toString())
+                            InfoRow("Jumlah Biji Cacat", safeDetail.defectiveBeans.toString())
+                            InfoRow("Nilai Cacat", safeDetail.defectScoreTotal.toString())
+                            InfoRow("Cacat Dominan", safeDetail.dominantDefect)
+                            InfoRow("Durasi Scan", "${safeDetail.scanDurationMs} ms")
+                            InfoRow("Petugas", safeDetail.officerName)
                         }
                     }
 
                     Spacer(Modifier.height(16.dp))
 
-                    // 5) Detail Cacat (table)
+                    // ===== Defect Table =====
                     Text(
                         "Detail Cacat",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold
                     )
+
                     Spacer(Modifier.height(8.dp))
 
-                    DefectTable(defects = detail.defects)
+                    DefectTable(defects = defects)
                 }
             }
 
@@ -300,7 +266,7 @@ fun HistoryDetailScreen(
         }
     }
 
-    // ===== Dialog edit batch name =====
+    // ===== Dialog Edit Batch =====
     if (showEditDialog) {
         AlertDialog(
             onDismissRequest = { showEditDialog = false },
@@ -325,7 +291,7 @@ fun HistoryDetailScreen(
         )
     }
 
-    // ===== Zoom image dialog (placeholder) =====
+    // ===== Zoom Dialog =====
     if (showImageZoom) {
         Dialog(onDismissRequest = { showImageZoom = false }) {
             Box(
@@ -341,6 +307,8 @@ fun HistoryDetailScreen(
         }
     }
 }
+
+/* ===== Helper UI ===== */
 
 @Composable
 private fun InfoRow(label: String, value: String) {
@@ -380,16 +348,13 @@ private fun DefectTable(defects: List<DefectRowUi>) {
                 .horizontalScroll(scroll)
                 .padding(12.dp)
         ) {
-            // Header
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                TableCell("No", 40.dp, isHeader = true)
-                TableCell("Nama Jenis Cacat", 220.dp, isHeader = true)
-                TableCell("Nilai Cacat", 90.dp, isHeader = true)
-                TableCell("Jumlah Biji", 90.dp, isHeader = true)
-                TableCell("Total Nilai", 100.dp, isHeader = true)
+
+            Row(modifier = Modifier.fillMaxWidth()) {
+                TableCell("No", 40.dp, true)
+                TableCell("Nama Jenis Cacat", 220.dp, true)
+                TableCell("Nilai Cacat", 90.dp, true)
+                TableCell("Jumlah Biji", 90.dp, true)
+                TableCell("Total Nilai", 100.dp, true)
             }
 
             Spacer(Modifier.height(8.dp))
@@ -417,7 +382,13 @@ private fun TableCell(
     Text(
         text = text,
         modifier = Modifier.width(width),
-        style = if (isHeader) MaterialTheme.typography.labelMedium else MaterialTheme.typography.bodySmall,
-        fontWeight = if (isHeader) FontWeight.SemiBold else FontWeight.Normal
+        style = if (isHeader)
+            MaterialTheme.typography.labelMedium
+        else
+            MaterialTheme.typography.bodySmall,
+        fontWeight = if (isHeader)
+            FontWeight.SemiBold
+        else
+            FontWeight.Normal
     )
 }

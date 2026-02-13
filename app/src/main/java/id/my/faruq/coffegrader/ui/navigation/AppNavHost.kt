@@ -1,14 +1,15 @@
 package id.my.faruq.coffegrader.ui.navigation
 
 import androidx.compose.runtime.Composable
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
-import androidx.navigation.compose.NavHost
-import androidx.navigation.compose.composable
-import androidx.navigation.compose.rememberNavController
+import androidx.navigation.compose.*
 import id.my.faruq.coffegrader.ui.about.AboutScreen
 import id.my.faruq.coffegrader.ui.camera.CameraScreen
 import id.my.faruq.coffegrader.ui.history.HistoryScreen
 import id.my.faruq.coffegrader.ui.history.HistoryDetailScreen
+import id.my.faruq.coffegrader.ui.history.HistoryDetailViewModel
+import id.my.faruq.coffegrader.ui.history.HistoryViewModel
 import id.my.faruq.coffegrader.ui.home.HomeScreen
 
 object Routes {
@@ -17,9 +18,7 @@ object Routes {
     const val HISTORY = "history"
     const val ABOUT = "about"
     const val HISTORY_DETAIL = "history_detail"
-
 }
-
 
 @Composable
 fun AppNavHost(
@@ -29,6 +28,8 @@ fun AppNavHost(
         navController = navController,
         startDestination = Routes.HOME
     ) {
+
+        // ================= HOME =================
         composable(Routes.HOME) {
             HomeScreen(
                 onGoToCamera = { navController.navigate(Routes.CAMERA) },
@@ -43,17 +44,20 @@ fun AppNavHost(
                     navController.navigate("${Routes.HISTORY_DETAIL}/$scanId")
                 }
             )
-
         }
 
-        composable(Routes.CAMERA) { CameraScreen(
-            onNavigateToHome = {
-                navController.navigate(Routes.HOME) {
-                    popUpTo(Routes.HOME) { inclusive = true }
+        // ================= CAMERA =================
+        composable(Routes.CAMERA) {
+            CameraScreen(
+                onNavigateToHome = {
+                    navController.navigate(Routes.HOME) {
+                        popUpTo(Routes.HOME) { inclusive = true }
+                    }
                 }
-            }
-        )
+            )
         }
+
+        // ================= HISTORY LIST =================
         composable(Routes.HISTORY) {
             HistoryScreen(
                 onOpenDetail = { scanId ->
@@ -71,18 +75,29 @@ fun AppNavHost(
                         popUpTo(Routes.HISTORY) { inclusive = true }
                     }
                 },
-                onGoAbout = { navController.navigate(Routes.ABOUT) }
+                onGoAbout = { navController.navigate(Routes.ABOUT) },
             )
         }
 
-        composable(Routes.ABOUT) { AboutScreen(onBack = { navController.popBackStack() }) }
-        composable( "${Routes.HISTORY_DETAIL}/{scanId}") { backStackEntry ->
+        // ================= ABOUT =================
+        composable(Routes.ABOUT) {
+            AboutScreen(onBack = { navController.popBackStack() })
+        }
+
+        // ================= HISTORY DETAIL =================
+        composable(
+            route = "${Routes.HISTORY_DETAIL}/{scanId}"
+        ) { backStackEntry ->
+
             val scanId = backStackEntry.arguments?.getString("scanId") ?: ""
+
+            val detailVm: HistoryDetailViewModel = hiltViewModel(backStackEntry)
+
             HistoryDetailScreen(
                 scanId = scanId,
-                onBack = {navController.popBackStack()}
+                vm = detailVm,
+                onBack = { navController.popBackStack() }
             )
         }
-        }
     }
-
+}
