@@ -17,7 +17,7 @@ import id.my.faruq.coffegrader.data.local.entity.ScanHistoryEntity
         ScanHistoryEntity::class,
         ScanDefectEntity::class
     ],
-    version = 3,
+    version = 5,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {

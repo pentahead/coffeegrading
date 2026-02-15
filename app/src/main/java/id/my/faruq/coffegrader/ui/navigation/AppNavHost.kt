@@ -11,10 +11,14 @@ import id.my.faruq.coffegrader.ui.history.HistoryDetailScreen
 import id.my.faruq.coffegrader.ui.history.HistoryDetailViewModel
 import id.my.faruq.coffegrader.ui.history.HistoryViewModel
 import id.my.faruq.coffegrader.ui.home.HomeScreen
+import id.my.faruq.coffegrader.ui.sample.SampleInputScreen
+import id.my.faruq.coffegrader.ui.sample.SampleInputViewModel
 
 object Routes {
     const val HOME = "home"
+    const val SAMPLE_INPUT = "sample_input"
     const val CAMERA = "camera"
+    const val CAMERA_WITH_SAMPLE = "camera/{sampleInfoId}"
     const val HISTORY = "history"
     const val ABOUT = "about"
     const val HISTORY_DETAIL = "history_detail"
@@ -32,7 +36,7 @@ fun AppNavHost(
         // ================= HOME =================
         composable(Routes.HOME) {
             HomeScreen(
-                onGoToCamera = { navController.navigate(Routes.CAMERA) },
+                onGoToCamera = { navController.navigate(Routes.SAMPLE_INPUT) },
                 onGoToHistory = { navController.navigate(Routes.HISTORY) },
                 onGoToAbout = { navController.navigate(Routes.ABOUT) },
                 onRefreshHome = {
@@ -46,12 +50,33 @@ fun AppNavHost(
             )
         }
 
-        // ================= CAMERA =================
-        composable(Routes.CAMERA) {
+        // ================= INPUT SAMPEL (sebelum scan) =================
+        composable(Routes.SAMPLE_INPUT) {
+            val vm: SampleInputViewModel = hiltViewModel()
+            SampleInputScreen(
+                vm = vm,
+                onNextToScan = { sampleId ->
+                    navController.navigate("camera/$sampleId")
+                },
+                onBack = { navController.popBackStack() }
+            )
+        }
+
+        // ================= CAMERA (dengan sampleInfoId dari input sampel) =================
+        composable(route = Routes.CAMERA_WITH_SAMPLE) { backStackEntry ->
+            val sampleInfoIdStr = backStackEntry.arguments?.getString("sampleInfoId") ?: "0"
+            val sampleInfoId = sampleInfoIdStr.toLongOrNull() ?: 0L
             CameraScreen(
+                sampleInfoId = if (sampleInfoId > 0) sampleInfoId else null,
                 onNavigateToHome = {
                     navController.navigate(Routes.HOME) {
                         popUpTo(Routes.HOME) { inclusive = true }
+                    }
+                },
+                onSaveAndShowDetail = { historyId ->
+                    navController.navigate("${Routes.HISTORY_DETAIL}/$historyId") {
+                        popUpTo(Routes.HOME) { inclusive = false }
+                        launchSingleTop = true
                     }
                 }
             )
@@ -69,7 +94,7 @@ fun AppNavHost(
                         launchSingleTop = true
                     }
                 },
-                onGoScan = { navController.navigate(Routes.CAMERA) },
+                onGoScan = { navController.navigate(Routes.SAMPLE_INPUT) },
                 onGoHistoryRefresh = {
                     navController.navigate(Routes.HISTORY) {
                         popUpTo(Routes.HISTORY) { inclusive = true }

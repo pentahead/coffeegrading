@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import id.my.faruq.coffegrader.data.repository.DefectRowUi
 import id.my.faruq.coffegrader.data.repository.HistoryDetailUi
+import id.my.faruq.coffegrader.util.GradeColors
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -132,7 +133,7 @@ fun HistoryDetailScreen(
 
                     Spacer(Modifier.height(6.dp))
 
-                    // ===== Time & Date =====
+                    // ===== Waktu (jam:menit:detik) & Tanggal =====
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.Center
@@ -151,7 +152,7 @@ fun HistoryDetailScreen(
                             leadingIcon = {
                                 Icon(
                                     imageVector = Icons.Default.AccessTime,
-                                    contentDescription = "Time Icon",
+                                    contentDescription = "Waktu",
                                     modifier = Modifier.size(AssistChipDefaults.IconSize)
                                 )
                             }
@@ -167,7 +168,7 @@ fun HistoryDetailScreen(
                             leadingIcon = {
                                 Icon(
                                     imageVector = Icons.Default.CalendarMonth,
-                                    contentDescription = "Date Icon",
+                                    contentDescription = "Tanggal",
                                     modifier = Modifier.size(AssistChipDefaults.IconSize)
                                 )
                             }
@@ -180,7 +181,7 @@ fun HistoryDetailScreen(
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(14.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
                     ) {
 
                         Box(
@@ -202,9 +203,9 @@ fun HistoryDetailScreen(
                             contentAlignment = Alignment.Center
                         ) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text("Mutu", color = Color.White)
+                                Text("Mutu", color = Color.White, style = MaterialTheme.typography.titleSmall)
                                 Text(
-                                    safeDetail.gradeText,
+                                    GradeColors.gradeDisplayText(safeDetail.gradeText),
                                     color = Color.White,
                                     style = MaterialTheme.typography.displaySmall,
                                     fontWeight = FontWeight.ExtraBold
@@ -214,6 +215,40 @@ fun HistoryDetailScreen(
                     }
 
                     Spacer(Modifier.height(16.dp))
+
+                    // ===== Info Sampel - jika ada =====
+                    safeDetail.sampleInfo?.let { sample ->
+                        Text(
+                            "Info Sampel",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Card(
+                            shape = RoundedCornerShape(14.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFFE8F5E9))
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(12.dp),
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                InfoRow("Batch ID Sampel", sample.batchId)
+                                InfoRow("Jenis Kopi", sample.coffeeType)
+                                InfoRow("Metode Pengolahan", sample.processingMethod)
+                                InfoRow("Ukuran Biji", sample.beanSize)
+                                InfoRow("Bentuk Biji", sample.beanShape)
+                                InfoRow("Jenis Sortasi", sample.sortationType)
+                                InfoRow("Serangga hidup", if (sample.hasInsect) "Ya" else "Tidak")
+                                InfoRow("Bau kapang/busuk", if (sample.hasMoldSmell) "Ya" else "Tidak")
+                                InfoRow("Kadar Air (%)", sample.moistureContent.toString())
+                                InfoRow("Kadar Kotoran (%)", sample.dirtContent.toString())
+                                sample.origin?.takeIf { it.isNotBlank() }?.let { InfoRow("Asal", it) }
+                            }
+                        }
+                        Spacer(Modifier.height(16.dp))
+                    }
 
                     // ===== Detail Informasi =====
                     Text(
@@ -234,7 +269,7 @@ fun HistoryDetailScreen(
                                 .padding(12.dp),
                             verticalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            InfoRow("Batch ID", currentBatchName)
+                            InfoRow("Batch ID", safeDetail.sampleInfo?.batchId ?: currentBatchName)
                             InfoRow("Waktu", "${safeDetail.timeText} WIB")
                             InfoRow("Tanggal", safeDetail.dateText)
                             InfoRow("Mutu Biji", "Mutu ${safeDetail.gradeText}")
@@ -281,8 +316,11 @@ fun HistoryDetailScreen(
             },
             confirmButton = {
                 TextButton(onClick = {
-                    currentBatchName = editText.trim().ifEmpty { currentBatchName }
-                    showEditDialog = false
+                    val newName = editText.trim().ifEmpty { currentBatchName }
+                    vm.updateBatchName(scanId.toLong(), newName) {
+                        currentBatchName = newName
+                        showEditDialog = false
+                    }
                 }) { Text("Simpan") }
             },
             dismissButton = {

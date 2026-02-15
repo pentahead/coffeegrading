@@ -2,13 +2,16 @@ package id.my.faruq.coffegrader.ui.sample
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import dagger.hilt.android.lifecycle.HiltViewModel
 import id.my.faruq.coffegrader.data.local.entity.SampleInfoEntity
 import id.my.faruq.coffegrader.data.repository.SampleRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import javax.inject.Inject
 
-class SampleInputViewModel(
+@HiltViewModel
+class SampleInputViewModel @Inject constructor(
     private val repository: SampleRepository
 ) : ViewModel() {
 

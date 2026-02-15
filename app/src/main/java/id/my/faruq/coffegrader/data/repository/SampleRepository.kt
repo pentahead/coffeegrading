@@ -11,4 +11,6 @@ class SampleRepository(
     }
 
     fun observeSamples() = dao.observeAllSamples()
+
+    suspend fun getById(id: Long): SampleInfoEntity? = dao.getById(id)
 }

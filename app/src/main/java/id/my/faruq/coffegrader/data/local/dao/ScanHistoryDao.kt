@@ -32,4 +32,7 @@ interface ScanHistoryDao {
     LIMIT 1
 """)
     fun getHistoryDetail(scanId: Long): Flow<ScanHistoryEntity?>
+
+    @Query("UPDATE scan_history SET batchName = :batchName WHERE id = :historyId")
+    suspend fun updateBatchName(historyId: Long, batchName: String)
 }

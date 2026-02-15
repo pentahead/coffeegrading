@@ -8,9 +8,11 @@ import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import id.my.faruq.coffegrader.data.local.AppDatabase
+import id.my.faruq.coffegrader.data.local.dao.SampleInfoDao
 import id.my.faruq.coffegrader.data.local.dao.ScanDefectDao
 import id.my.faruq.coffegrader.data.local.dao.ScanHistoryDao
 import id.my.faruq.coffegrader.data.repository.ScanRepository
+import id.my.faruq.coffegrader.data.repository.SampleRepository
 import javax.inject.Singleton
 
 @Module
@@ -40,6 +42,10 @@ object DatabaseModule {
     fun provideDefectDao(db: AppDatabase): ScanDefectDao =
         db.scanDefectDao()
 
+    @Provides
+    fun provideSampleInfoDao(db: AppDatabase): SampleInfoDao =
+        db.sampleInfoDao()
+
     // ✅ Repository
     @Provides
     @Singleton
@@ -48,5 +54,11 @@ object DatabaseModule {
         defectDao: ScanDefectDao
     ): ScanRepository {
         return ScanRepository(historyDao, defectDao)
+    }
+
+    @Provides
+    @Singleton
+    fun provideSampleRepository(dao: SampleInfoDao): SampleRepository {
+        return SampleRepository(dao)
     }
 }

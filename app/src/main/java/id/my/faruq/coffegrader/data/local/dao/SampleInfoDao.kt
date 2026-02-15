@@ -14,4 +14,7 @@ interface SampleInfoDao {
 
     @Query("SELECT * FROM sample_info ORDER BY timestamp DESC")
     fun observeAllSamples(): Flow<List<SampleInfoEntity>>
+
+    @Query("SELECT * FROM sample_info WHERE id = :id LIMIT 1")
+    suspend fun getById(id: Long): SampleInfoEntity?
 }

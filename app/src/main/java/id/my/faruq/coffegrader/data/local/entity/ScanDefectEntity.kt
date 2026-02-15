@@ -14,5 +14,5 @@ data class ScanDefectEntity(
 
     val defectName: String,
     val defectCount: Int,
-    val defectValue: Float
+    val defectValue: Double
 )

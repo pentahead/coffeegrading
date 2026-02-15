@@ -18,12 +18,15 @@ data class ScanHistoryEntity(
     // Total biji terdeteksi
     val totalBeans: Int,
 
-    // Total nilai cacat
-    val defectScore: Int,
+    // Total nilai cacat (desimal sesuai SNI)
+    val defectScore: Double,
 
     // Mutu hasil grading (1,2,3,4a,...)
     val gradeText: String,
 
     // Thumbnail path optional
-    val thumbnailPath: String? = null
+    val thumbnailPath: String? = null,
+
+    // ID sampel (info SNI) yang diisi sebelum scan
+    val sampleInfoId: Long? = null
 )

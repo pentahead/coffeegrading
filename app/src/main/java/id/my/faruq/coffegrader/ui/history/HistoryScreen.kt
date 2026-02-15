@@ -21,29 +21,55 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.ui.window.Dialog
 import androidx.hilt.navigation.compose.hiltViewModel
-
+import id.my.faruq.coffegrader.util.GradeColors
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 data class HistoryItemUi(
     val id: String,
     val batchName: String,
     val dateTimeText: String,
     val totalBeans: Int,
-    val defectScore: Int,
+    val defectScore: Double,
     val gradeText: String,
     val cardColor: Color
 )
 
-private enum class MutuFilter(val label: String) {
-    Semua("Semua"),
-    Mutu1("Mutu 1"),
-    Mutu2("Mutu 2"),
-    Mutu3("Mutu 3"),
-    Mutu4a("Mutu 4a"),
-    Mutu5("Mutu 5"),
-    Mutu6("Mutu 6"),
-    Mutu7("Mutu 7")
+/** Opsi mutu untuk dropdown filter (semua opsional) */
+private val MUTU_OPTIONS = listOf(
+    "" to "Semua Mutu",
+    "1" to "Mutu 1",
+    "2" to "Mutu 2",
+    "3" to "Mutu 3",
+    "4a" to "Mutu 4a",
+    "4b" to "Mutu 4b",
+    "5" to "Mutu 5",
+    "6" to "Mutu 6"
+)
+
+/** Quick filter tab: Semua, Mutu 1 .. Mutu 6 */
+private val QUICK_MUTU_TABS = listOf(
+    "" to "Semua",
+    "1" to "Mutu 1",
+    "2" to "Mutu 2",
+    "3" to "Mutu 3",
+    "4a" to "Mutu 4a",
+    "4b" to "Mutu 4b",
+    "5" to "Mutu 5",
+    "6" to "Mutu 6"
+)
+
+/** Urutkan: nama, tanggal, mutu */
+private enum class SortOption(val label: String) {
+    NameAsc("Nama A → Z"),
+    NameDesc("Nama Z → A"),
+    DateNewest("Tanggal Terbaru"),
+    DateOldest("Tanggal Terlama"),
+    MutuTertinggi("Mutu Tertinggi (1 dulu)"),
+    MutuTerendah("Mutu Terendah (6 dulu)")
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -56,13 +82,18 @@ fun HistoryScreen(
     onGoHistoryRefresh: () -> Unit,
     onGoAbout: () -> Unit
 ) {
-    // ✅ Data dari Room (Entity)
     val entities by vm.historyList.collectAsState(initial = emptyList())
 
-    // ✅ Filter state
-    var selectedFilter by remember { mutableStateOf(MutuFilter.Semua) }
+    // Filter state (semua opsional)
+    var showFilterDialog by remember { mutableStateOf(false) }
+    var filterDate by remember { mutableStateOf("") }
+    var filterMutu by remember { mutableStateOf("") }
+    var filterBatchName by remember { mutableStateOf("") }
 
-    // ✅ Convert Entity -> UI Model
+    // Sort state
+    var showSortMenu by remember { mutableStateOf(false) }
+    var sortOption by remember { mutableStateOf(SortOption.DateNewest) }
+
     val uiItems = remember(entities) {
         entities.map { e ->
             HistoryItemUi(
@@ -72,28 +103,80 @@ fun HistoryScreen(
                 totalBeans = e.totalBeans,
                 defectScore = e.defectScore,
                 gradeText = e.gradeText,
-                cardColor = when (e.gradeText.lowercase()) {
-                    "1" -> Color(0xFF12A150)
-                    "4a" -> Color(0xFFF57C00)
-                    else -> Color(0xFF8E1B1B)
-                }
+                cardColor = Color(GradeColors.colorFor(e.gradeText))
             )
         }
     }
 
-    // ✅ Apply filter
-    val shownItems = remember(selectedFilter, uiItems) {
-        if (selectedFilter == MutuFilter.Semua) {
-            uiItems
-        } else {
-            val grade = selectedFilter.label.removePrefix("Mutu ").lowercase()
-            uiItems.filter { it.gradeText.lowercase() == grade }
+    fun normalizeGrade(s: String) = s.lowercase().trim().replace("mutu ", "").trim()
+
+    fun parseDateFromDateTime(dateTimeText: String): String? {
+        val t = dateTimeText.trim()
+        if (t.contains(" / ")) {
+            val part = t.split("/").map { it.trim() }.getOrNull(1) ?: return null
+            return part.takeIf { it.length >= 8 }
         }
+        if (t.contains(" ")) {
+            val part = t.split(" ", limit = 2).firstOrNull() ?: return null
+            if (part.length >= 8 && part.contains("-")) {
+                val seg = part.split("-")
+                if (seg.size == 3 && seg[0].length == 2) return "${seg[2]}-${seg[1]}-${seg[0]}"
+                return part
+            }
+            return part
+        }
+        return t.takeIf { it.length >= 8 }
+    }
+
+    fun gradeOrder(gradeText: String): Int = when (normalizeGrade(gradeText)) {
+        "1" -> 1; "2" -> 2; "3" -> 3; "4a" -> 4; "4b" -> 5; "5" -> 6; "6" -> 7
+        else -> 0
+    }
+
+    val shownItems = remember(uiItems, filterDate, filterMutu, filterBatchName, sortOption) {
+        var list = uiItems
+        if (filterDate.isNotBlank()) {
+            val fd = filterDate.trim()
+            list = list.filter { parseDateFromDateTime(it.dateTimeText)?.contains(fd) == true }
+        }
+        if (filterMutu.isNotBlank()) {
+            val g = filterMutu.lowercase()
+            list = list.filter { normalizeGrade(it.gradeText) == g }
+        }
+        if (filterBatchName.isNotBlank()) {
+            val q = filterBatchName.trim().lowercase()
+            list = list.filter { it.batchName.lowercase().contains(q) }
+        }
+        list = when (sortOption) {
+            SortOption.NameAsc -> list.sortedBy { it.batchName.lowercase() }
+            SortOption.NameDesc -> list.sortedByDescending { it.batchName.lowercase() }
+            SortOption.DateNewest -> list.sortedByDescending { parseDateFromDateTime(it.dateTimeText) ?: "" }
+            SortOption.DateOldest -> list.sortedBy { parseDateFromDateTime(it.dateTimeText) ?: "" }
+            SortOption.MutuTertinggi -> list.sortedBy { gradeOrder(it.gradeText) }
+            SortOption.MutuTerendah -> list.sortedByDescending { gradeOrder(it.gradeText) }
+        }
+        list
+    }
+
+    if (showFilterDialog) {
+        FilterDialog(
+            filterDate = filterDate,
+            onFilterDateChange = { filterDate = it },
+            filterMutu = filterMutu,
+            onFilterMutuChange = { filterMutu = it },
+            filterBatchName = filterBatchName,
+            onFilterBatchNameChange = { filterBatchName = it },
+            onDismiss = { showFilterDialog = false },
+            onReset = {
+                filterDate = ""
+                filterMutu = ""
+                filterBatchName = ""
+            }
+        )
     }
 
     Scaffold(
         topBar = {
-            // sesuai mockup: kiri "Riwayat", kanan menu/about
             TopAppBar(
                 title = { Text("Riwayat", fontWeight = FontWeight.Bold) },
                 actions = {
@@ -116,58 +199,264 @@ fun HistoryScreen(
                 .fillMaxSize()
                 .padding(padding)
         ) {
-
-            // baris Filter / Urutkan (UI saja dulu)
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 10.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+            // Baris Filter & Urutkan
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                color = MaterialTheme.colorScheme.surface,
+                shadowElevation = 2.dp,
+                tonalElevation = 1.dp
             ) {
-                TextButton(onClick = { /* nanti */ }) {
-                    Icon(Icons.Filled.Tune, contentDescription = null)
-                    Spacer(Modifier.width(6.dp))
-                    Text("Filter")
-                }
-                TextButton(onClick = { /* nanti */ }) {
-                    Text("Urutkan")
-                    Spacer(Modifier.width(6.dp))
-                    Icon(Icons.Filled.SwapVert, contentDescription = null)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    FilterChip(
+                        selected = filterDate.isNotBlank() || filterMutu.isNotBlank() || filterBatchName.isNotBlank(),
+                        onClick = { showFilterDialog = true },
+                        leadingIcon = {
+                            Icon(Icons.Filled.Tune, contentDescription = null, Modifier.size(18.dp))
+                        },
+                        label = { Text("Filter") }
+                    )
+                    Box {
+                        FilterChip(
+                            selected = false,
+                            onClick = { showSortMenu = true },
+                            label = { Text(sortOption.label) },
+                            trailingIcon = {
+                                Icon(Icons.Filled.SwapVert, contentDescription = null, Modifier.size(18.dp))
+                            }
+                        )
+                        DropdownMenu(
+                            expanded = showSortMenu,
+                            onDismissRequest = { showSortMenu = false }
+                        ) {
+                            SortOption.entries.forEach { opt ->
+                                DropdownMenuItem(
+                                    text = { Text(opt.label) },
+                                    onClick = {
+                                        sortOption = opt
+                                        showSortMenu = false
+                                    }
+                                )
+                            }
+                        }
+                    }
                 }
             }
 
-            // Tab mutu (scrollable kalau kepanjangan)
+            // Quick filter tab: Semua, Mutu 1 .. Mutu 6
             ScrollableTabRow(
-                selectedTabIndex = selectedFilter.ordinal,
-                edgePadding = 16.dp
+                selectedTabIndex = QUICK_MUTU_TABS.indexOfFirst { it.first == filterMutu }.takeIf { it >= 0 } ?: 0,
+                edgePadding = 16.dp,
+                modifier = Modifier.fillMaxWidth()
             ) {
-                MutuFilter.entries.forEach { f ->
+                QUICK_MUTU_TABS.forEachIndexed { index, (value, label) ->
                     Tab(
-                        selected = selectedFilter == f,
-                        onClick = { selectedFilter = f },
-                        text = { Text(f.label) }
+                        selected = filterMutu == value,
+                        onClick = { filterMutu = value },
+                        text = { Text(label) }
                     )
                 }
             }
 
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(8.dp))
 
-            // List riwayat
-            LazyColumn(
-                contentPadding = PaddingValues(
-                    start = 16.dp,
-                    end = 16.dp,
-                    top = 6.dp,
-                    bottom = 100.dp // biar ga ketutup bottom nav
-                ),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+            if (shownItems.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(32.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            "Tidak ada data",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            "Ubah filter atau pastikan ada riwayat scan.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.outline
+                        )
+                    }
+                }
+            } else {
+                LazyColumn(
+                    contentPadding = PaddingValues(
+                        start = 16.dp,
+                        end = 16.dp,
+                        top = 12.dp,
+                        bottom = 100.dp
+                    ),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    items(shownItems) { item ->
+                        HistoryCard(
+                            item = item,
+                            onClick = { onOpenDetail(item.id) }
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+private val DATE_FORMAT = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun FilterDialog(
+    filterDate: String,
+    onFilterDateChange: (String) -> Unit,
+    filterMutu: String,
+    onFilterMutuChange: (String) -> Unit,
+    filterBatchName: String,
+    onFilterBatchNameChange: (String) -> Unit,
+    onDismiss: () -> Unit,
+    onReset: () -> Unit
+) {
+    var mutuExpanded by remember { mutableStateOf(false) }
+    var showDatePicker by remember { mutableStateOf(false) }
+    val initialMillis = remember(filterDate) {
+        if (filterDate.isNotBlank()) {
+            try {
+                DATE_FORMAT.parse(filterDate)?.time
+            } catch (_: Exception) { null }
+        } else null
+    }
+    val datePickerState = rememberDatePickerState(
+        initialSelectedDateMillis = initialMillis,
+        yearRange = (2020..2030)
+    )
+
+    if (showDatePicker) {
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        datePickerState.selectedDateMillis?.let { millis ->
+                            onFilterDateChange(DATE_FORMAT.format(Date(millis)))
+                        }
+                        showDatePicker = false
+                    }
+                ) {
+                    Text("OK")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDatePicker = false }) {
+                    Text("Batal")
+                }
+            }
+        ) {
+            DatePicker(state = datePickerState)
+        }
+    }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            shape = RoundedCornerShape(20.dp),
+            elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                items(shownItems) { item ->
-                    HistoryCard(
-                        item = item,
-                        onClick = { onOpenDetail(item.id) }
+                Text(
+                    "Filter Riwayat",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold
+                )
+                OutlinedCard(
+                    onClick = { showDatePicker = true },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text(
+                                "Tanggal",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                if (filterDate.isNotBlank()) filterDate else "Pilih tanggal",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = if (filterDate.isNotBlank())
+                                    MaterialTheme.colorScheme.onSurface
+                                else
+                                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                            )
+                        }
+                        Text("📅", style = MaterialTheme.typography.titleMedium)
+                    }
+                }
+                ExposedDropdownMenuBox(
+                    expanded = mutuExpanded,
+                    onExpandedChange = { mutuExpanded = it }
+                ) {
+                    OutlinedTextField(
+                        value = MUTU_OPTIONS.find { it.first == filterMutu }?.second ?: "Semua Mutu",
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("Mutu") },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .menuAnchor(),
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = mutuExpanded) }
                     )
+                    ExposedDropdownMenu(
+                        expanded = mutuExpanded,
+                        onDismissRequest = { mutuExpanded = false }
+                    ) {
+                        MUTU_OPTIONS.forEach { (value, label) ->
+                            DropdownMenuItem(
+                                text = { Text(label) },
+                                onClick = {
+                                    onFilterMutuChange(value)
+                                    mutuExpanded = false
+                                }
+                            )
+                        }
+                    }
+                }
+                OutlinedTextField(
+                    value = filterBatchName,
+                    onValueChange = onFilterBatchNameChange,
+                    label = { Text("Nama Batch") },
+                    placeholder = { Text("Cari nama batch...") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    TextButton(onClick = onReset) {
+                        Text("Reset")
+                    }
+                    Spacer(Modifier.width(8.dp))
+                    Button(onClick = onDismiss) {
+                        Text("Terapkan")
+                    }
                 }
             }
         }
@@ -210,7 +499,7 @@ private fun HistoryCard(
                 Text("Nilai Cacat : ${item.defectScore}", color = Color.White, style = MaterialTheme.typography.bodySmall)
             }
 
-            // Mutu circle kanan
+            // Mutu circle kanan: "Mutu" di atas, angka di bawah
             Box(
                 modifier = Modifier
                     .size(62.dp)
@@ -220,7 +509,12 @@ private fun HistoryCard(
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text("Mutu", color = Color.White, style = MaterialTheme.typography.labelSmall)
-                    Text(item.gradeText, color = Color.White, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleLarge)
+                    Text(
+                        GradeColors.gradeDisplayText(item.gradeText),
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.titleLarge
+                    )
                 }
             }
         }

@@ -51,7 +51,7 @@ fun ScanScreen(
                     vm.finishScan(
                         batchName = batchName,
                         totalBeans = totalBeansText.toIntOrNull() ?: 0,
-                        onDone = {
+                        onDone = { _ ->
                             onNavigateToHistory()
                         }
                     )

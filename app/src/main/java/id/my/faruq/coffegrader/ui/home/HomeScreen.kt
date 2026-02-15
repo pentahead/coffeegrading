@@ -17,6 +17,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.border
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -24,8 +25,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.res.painterResource
 import androidx.compose.foundation.Image
 import androidx.compose.ui.layout.ContentScale
+import androidx.hilt.navigation.compose.hiltViewModel
 import id.my.faruq.coffegrader.R
-// ===== Dummy model (nanti ganti dari Room) =====
+import id.my.faruq.coffegrader.util.GradeColors
+// ===== Model untuk item scan di carousel =====
 data class ScanHistoryItem(
     val id: String,
     val batchName: String,
@@ -42,15 +45,10 @@ fun HomeScreen(
     onGoToHistory: () -> Unit,
     onGoToAbout: () -> Unit,
     onRefreshHome: () -> Unit,
-    onOpenHistoryDetail: (String) -> Unit) {
-    // Dummy data untuk carousel (siap diganti dari DB)
-    val dummyHistory = remember {
-        listOf(
-            ScanHistoryItem("SCAN_001", "SCAN_001", "08:15:22 / 2025-11-30", "1", Color(0xFF12A150)),
-            ScanHistoryItem("SCAN_002", "SCAN_002", "08:15:22 / 2025-11-30", "4a", Color(0xFFF57C00)),
-            ScanHistoryItem("SCAN_003", "SCAN_003", "08:15:22 / 2025-11-30", "1", Color(0xFF12A150)),
-        )
-    }
+    onOpenHistoryDetail: (String) -> Unit,
+    vm: HomeViewModel = hiltViewModel()
+) {
+    val recentScans by vm.recentScans.collectAsState(initial = emptyList())
 
     Scaffold(
 
@@ -140,7 +138,7 @@ fun HomeScreen(
                 contentPadding = PaddingValues(horizontal = 16.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                items(dummyHistory) { item ->
+                items(recentScans) { item ->
                     HistoryCarouselCard(
                         item = item,
                         onClick = {
@@ -221,49 +219,71 @@ private fun HistoryCarouselCard(
     Card(
         onClick = onClick,
         modifier = Modifier.width(165.dp),
-        shape = RoundedCornerShape(14.dp)
+        shape = RoundedCornerShape(14.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column {
-            // Thumbnail placeholder
+            // Area gambar (putih) - ~60–70% tinggi kartu
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(92.dp)
-                    .background(Color.Black.copy(alpha = 0.08f))
-            )
+                    .height(100.dp)
+                    .background(Color.White)
+            ) {
+                Image(
+                    painter = painterResource(R.drawable.bgilustrasi),
+                    contentDescription = null,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(8.dp),
+                    contentScale = ContentScale.Crop
+                )
+            }
 
+            // Area info (hijau): batch, tanggal, lingkaran mutu di kanan (tidak nabrak)
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(item.gradeColor)
-                    .padding(10.dp)
+                    .padding(horizontal = 10.dp, vertical = 10.dp)
             ) {
-                Column {
-                    Text(
-                        text = item.batchName,
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = item.dateTimeText,
-                        color = Color.White,
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                }
-
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .size(34.dp)
-                        .clip(CircleShape)
-                        .background(Color.White),
-                    contentAlignment = Alignment.Center
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text(
-                        text = item.gradeText,
-                        fontWeight = FontWeight.Bold,
-                        color = item.gradeColor
-                    )
+                    Column(
+                        modifier = Modifier.weight(1f, fill = false)
+                    ) {
+                        Text(
+                            text = item.batchName,
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.titleSmall
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            text = item.dateTimeText,
+                            color = Color.White,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                    Spacer(Modifier.width(8.dp))
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(Color.White)
+                            .border(1.5.dp, item.gradeColor, CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = GradeColors.gradeDisplayText(item.gradeText),
+                            fontWeight = FontWeight.Bold,
+                            color = item.gradeColor,
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                    }
                 }
             }
         }

@@ -37,4 +37,12 @@ class HistoryDetailViewModel @Inject constructor(
             }
         }
     }
+
+    fun updateBatchName(historyId: Long, batchName: String, onUpdated: () -> Unit = {}) {
+        viewModelScope.launch {
+            repository.updateBatchName(historyId, batchName)
+            _detail.value = _detail.value?.copy(batchName = batchName)
+            onUpdated()
+        }
+    }
 }

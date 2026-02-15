@@ -19,56 +19,65 @@ class ScanViewModel @Inject constructor(
     fun finishScan(
         batchName: String,
         totalBeans: Int,
-        onDone: () -> Unit
+        sampleInfoId: Long? = null,
+        onDone: (Long) -> Unit
     ) {
         viewModelScope.launch {
 
-            // 🕒 waktu scan
+            //  waktu scan
             val dateTime = SimpleDateFormat(
                 "dd-MM-yyyy HH:mm:ss",
                 Locale.getDefault()
             ).format(Date())
 
-            // 🔧 Dummy hasil scan (nanti diganti YOLO)
+            //  Dummy hasil scan (nanti diganti YOLO)
             val defects = listOf(
                 ScanDefectEntity(
                     historyId = 0,
                     defectName = "Biji Hitam",
                     defectCount = 2,
-                    defectValue = 2.0f
+                    defectValue = 2.0
                 ),
                 ScanDefectEntity(
                     historyId = 0,
                     defectName = "Biji Pecah",
                     defectCount = 5,
-                    defectValue = 1.0f
+                    defectValue = 1.0
                 )
             )
 
-            // 🔢 hitung skor cacat
-            val defectScore = defects.sumOf {
-                (it.defectCount * it.defectValue).toInt()
+           //  hitung total nilai cacat sesuai SNI
+            val defectScore: Double = defects.sumOf {
+                it.defectCount * it.defectValue
             }
 
-            // 🏷️ contoh penentuan mutu (sementara)
+
+            //  klasifikasi mutu kopi sesuai SNI 01-2907-2008
             val gradeText = when {
-                defectScore <= 3 -> "1"
-                defectScore <= 6 -> "2"
-                defectScore <= 10 -> "3"
-                else -> "4a"
+                defectScore <= 11.0 -> "Mutu 1"
+                defectScore in 12.0..25.0 -> "Mutu 2"
+                defectScore in 26.0..44.0 -> "Mutu 3"
+                defectScore in 45.0..60.0 -> "Mutu 4a"
+                defectScore in 61.0..80.0 -> "Mutu 4b"
+                defectScore in 81.0..150.0 -> "Mutu 5"
+                defectScore in 151.0..225.0 -> "Mutu 6"
+                else -> "Di luar standar SNI"
             }
 
-            // 💾 simpan ke database
-            repository.saveScanResult(
+
+
+            //  simpan ke database
+            val historyId = repository.saveScanResult(
                 batchName = batchName,
                 dateTime = dateTime,
                 totalBeans = totalBeans,
                 defectScore = defectScore,
                 gradeText = gradeText,
-                defects = defects
+                defects = defects,
+                sampleInfoId = sampleInfoId
             )
 
-            onDone()
+            onDone(historyId)
         }
     }
 }

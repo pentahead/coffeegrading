@@ -67,6 +67,8 @@ import androidx.compose.animation.core.RepeatMode
 import androidx.compose.foundation.border
 import androidx.compose.material.icons.filled.FlashOn
 import androidx.compose.material.icons.filled.FlashOff
+import androidx.hilt.navigation.compose.hiltViewModel
+import id.my.faruq.coffegrader.ui.scan.ScanViewModel
 
 
 
@@ -118,12 +120,17 @@ private fun mapBoxesToScreen(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CameraScreen(
-//    onNavigateToHistory: () -> Unit,
-//    onNavigateToAbout: () -> Unit,
-    onNavigateToHome: () -> Unit
+    sampleInfoId: Long? = null,
+    onNavigateToHome: () -> Unit,
+    onSaveAndShowDetail: (Long) -> Unit = {}
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
+    val cameraVm: CameraViewModel = hiltViewModel()
+    val scanVm: ScanViewModel = hiltViewModel()
+    val batchName by cameraVm.batchName.collectAsState()
+
+    var showGuideDialog by remember(sampleInfoId) { mutableStateOf(sampleInfoId != null) }
 
     var hasCameraPermission by remember {
         mutableStateOf(
@@ -177,7 +184,22 @@ fun CameraScreen(
     Scaffold(
 
     ) { padding ->
-
+        if (showGuideDialog) {
+            AlertDialog(
+                onDismissRequest = { showGuideDialog = false },
+                title = { Text("Panduan Scan Biji") },
+                text = {
+                    Text(
+                        "Biji kopi harus dipaparkan (tidak boleh bertumpuk) dan berjumlah 300 gram agar hasil scan akurat."
+                    )
+                },
+                confirmButton = {
+                    Button(onClick = { showGuideDialog = false }) {
+                        Text("Oke")
+                    }
+                }
+            )
+        }
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -392,8 +414,8 @@ fun CameraScreen(
         }
     }
 
-        //  Overlay preview Bitmap (sementara)
-            capturedBitmap?.let { bmp ->
+        //  Overlay preview Bitmap + Simpan & Lihat Hasil
+        capturedBitmap?.let { bmp ->
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -407,17 +429,36 @@ fun CameraScreen(
                             .padding(16.dp)
                     )
 
-                    Button(
-                        onClick = { capturedBitmap = null },
+                    Row(
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
-                            .padding(16.dp)
+                            .padding(16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        Text("Tutup Preview")
+                        OutlinedButton(
+                            onClick = { capturedBitmap = null }
+                        ) {
+                            Text("Tutup Preview")
+                        }
+                        Button(
+                            onClick = {
+                                val name = batchName.ifBlank { "Sampel" }
+                                scanVm.finishScan(
+                                    batchName = name,
+                                    totalBeans = 100,
+                                    sampleInfoId = sampleInfoId,
+                                    onDone = { historyId ->
+                                        onSaveAndShowDetail(historyId)
+                                    }
+                                )
+                            }
+                        ) {
+                            Text("Simpan & Lihat Hasil")
+                        }
                     }
-                }
             }
         }
+    }
 
 
 
