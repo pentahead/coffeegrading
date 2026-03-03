@@ -8,6 +8,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.gestures.rememberTransformableState
+import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccessTime
@@ -18,15 +20,21 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import id.my.faruq.coffegrader.data.repository.DefectRowUi
 import id.my.faruq.coffegrader.data.repository.HistoryDetailUi
 import id.my.faruq.coffegrader.util.GradeColors
+import coil.compose.AsyncImage
+import androidx.compose.ui.layout.ContentScale
+import java.io.File
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -189,10 +197,25 @@ fun HistoryDetailScreen(
                                 .size(150.dp)
                                 .clip(RoundedCornerShape(12.dp))
                                 .background(Color.Black.copy(alpha = 0.06f))
-                                .clickable { showImageZoom = true },
+                                .clickable { if (safeDetail.imagePath != null) showImageZoom = true },
                             contentAlignment = Alignment.Center
                         ) {
-                            Text("Foto", color = Color.Black.copy(alpha = 0.55f))
+                            val imagePath = safeDetail.imagePath
+                            if (imagePath != null) {
+                                val file = File(imagePath)
+                                if (file.exists()) {
+                                    AsyncImage(
+                                        model = file,
+                                        contentDescription = "Foto scan",
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentScale = ContentScale.Crop
+                                    )
+                                } else {
+                                    Text("Foto", color = Color.Black.copy(alpha = 0.55f))
+                                }
+                            } else {
+                                Text("Foto", color = Color.Black.copy(alpha = 0.55f))
+                            }
                         }
 
                         Box(
@@ -329,19 +352,62 @@ fun HistoryDetailScreen(
         )
     }
 
-    // ===== Zoom Dialog =====
-    if (showImageZoom) {
-        Dialog(onDismissRequest = { showImageZoom = false }) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(1f)
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(Color.Black),
-                contentAlignment = Alignment.Center
-            ) {
-                Text("Zoom Foto (nanti isi Image)", color = Color.White)
-            }
+    // ===== Zoom Dialog (hanya jika ada gambar) =====
+    val zoomImagePath = safeDetail.imagePath
+    if (showImageZoom && zoomImagePath != null && File(zoomImagePath).exists()) {
+        Dialog(
+            onDismissRequest = { showImageZoom = false },
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            ZoomImageContent(
+                imagePath = zoomImagePath,
+                onDismiss = { showImageZoom = false }
+            )
+        }
+    }
+}
+
+@Composable
+private fun ZoomImageContent(
+    imagePath: String,
+    onDismiss: () -> Unit
+) {
+    var scale by remember { mutableStateOf(1f) }
+    var offset by remember { mutableStateOf(Offset.Zero) }
+    val transformState = rememberTransformableState { zoomChange, offsetChange, _ ->
+        scale = (scale * zoomChange).coerceIn(0.5f, 5f)
+        offset += offsetChange
+    }
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer(
+                    scaleX = scale,
+                    scaleY = scale,
+                    translationX = offset.x,
+                    translationY = offset.y
+                )
+                .transformable(state = transformState)
+        ) {
+            AsyncImage(
+                model = File(imagePath),
+                contentDescription = "Foto scan zoom",
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Fit
+            )
+        }
+        TextButton(
+            onClick = onDismiss,
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(8.dp)
+        ) {
+            Text("Tutup", color = Color.White)
         }
     }
 }

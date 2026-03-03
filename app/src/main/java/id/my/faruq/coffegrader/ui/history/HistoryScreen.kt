@@ -11,7 +11,7 @@ import androidx.compose.material.icons.filled.CenterFocusStrong
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.SwapVert
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -21,9 +21,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
 import androidx.hilt.navigation.compose.hiltViewModel
 import id.my.faruq.coffegrader.util.GradeColors
+import coil.compose.AsyncImage
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -35,19 +36,8 @@ data class HistoryItemUi(
     val totalBeans: Int,
     val defectScore: Double,
     val gradeText: String,
-    val cardColor: Color
-)
-
-/** Opsi mutu untuk dropdown filter (semua opsional) */
-private val MUTU_OPTIONS = listOf(
-    "" to "Semua Mutu",
-    "1" to "Mutu 1",
-    "2" to "Mutu 2",
-    "3" to "Mutu 3",
-    "4a" to "Mutu 4a",
-    "4b" to "Mutu 4b",
-    "5" to "Mutu 5",
-    "6" to "Mutu 6"
+    val cardColor: Color,
+    val thumbnailPath: String? = null
 )
 
 /** Quick filter tab: Semua, Mutu 1 .. Mutu 6 */
@@ -84,8 +74,8 @@ fun HistoryScreen(
 ) {
     val entities by vm.historyList.collectAsState(initial = emptyList())
 
-    // Filter state (semua opsional)
-    var showFilterDialog by remember { mutableStateOf(false) }
+    // Filter state: tanggal (kalender), mutu (tabs), nama batch (search di top bar)
+    var showDatePicker by remember { mutableStateOf(false) }
     var filterDate by remember { mutableStateOf("") }
     var filterMutu by remember { mutableStateOf("") }
     var filterBatchName by remember { mutableStateOf("") }
@@ -103,7 +93,8 @@ fun HistoryScreen(
                 totalBeans = e.totalBeans,
                 defectScore = e.defectScore,
                 gradeText = e.gradeText,
-                cardColor = Color(GradeColors.colorFor(e.gradeText))
+                cardColor = Color(GradeColors.colorFor(e.gradeText)),
+                thumbnailPath = e.thumbnailPath
             )
         }
     }
@@ -158,33 +149,64 @@ fun HistoryScreen(
         list
     }
 
-    if (showFilterDialog) {
-        FilterDialog(
-            filterDate = filterDate,
-            onFilterDateChange = { filterDate = it },
-            filterMutu = filterMutu,
-            onFilterMutuChange = { filterMutu = it },
-            filterBatchName = filterBatchName,
-            onFilterBatchNameChange = { filterBatchName = it },
-            onDismiss = { showFilterDialog = false },
-            onReset = {
-                filterDate = ""
-                filterMutu = ""
-                filterBatchName = ""
+    val initialDateMillis = remember(filterDate) {
+        if (filterDate.isNotBlank()) {
+            try {
+                DATE_FORMAT.parse(filterDate)?.time
+            } catch (_: Exception) { null }
+        } else null
+    }
+    val datePickerState = rememberDatePickerState(
+        initialSelectedDateMillis = initialDateMillis,
+        yearRange = (2020..2030)
+    )
+
+    if (showDatePicker) {
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        datePickerState.selectedDateMillis?.let { millis ->
+                            filterDate = DATE_FORMAT.format(Date(millis))
+                        }
+                        showDatePicker = false
+                    }
+                ) {
+                    Text("OK")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDatePicker = false }) {
+                    Text("Batal")
+                }
             }
-        )
+        ) {
+            DatePicker(state = datePickerState)
+        }
     }
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("Riwayat", fontWeight = FontWeight.Bold) },
-                actions = {
-                    IconButton(onClick = onGoAbout) {
-                        Icon(Icons.Filled.Info, contentDescription = "About")
+            Column(modifier = Modifier.fillMaxWidth()) {
+                TopAppBar(
+                    title = { Text("Riwayat", fontWeight = FontWeight.Bold) },
+                    actions = {
+                        IconButton(onClick = onGoAbout) {
+                            Icon(Icons.Filled.Info, contentDescription = "About")
+                        }
                     }
-                }
-            )
+                )
+                OutlinedTextField(
+                    value = filterBatchName,
+                    onValueChange = { filterBatchName = it },
+                    placeholder = { Text("Cari nama batch...") },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    singleLine = true
+                )
+            }
         },
         bottomBar = {
             BottomNavBar(
@@ -214,12 +236,16 @@ fun HistoryScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     FilterChip(
-                        selected = filterDate.isNotBlank() || filterMutu.isNotBlank() || filterBatchName.isNotBlank(),
-                        onClick = { showFilterDialog = true },
+                        selected = filterDate.isNotBlank(),
+                        onClick = { showDatePicker = true },
                         leadingIcon = {
-                            Icon(Icons.Filled.Tune, contentDescription = null, Modifier.size(18.dp))
+                            Icon(Icons.Filled.CalendarMonth, contentDescription = null, Modifier.size(18.dp))
                         },
-                        label = { Text("Filter") }
+                        label = {
+                            Text(
+                                if (filterDate.isNotBlank()) filterDate else "Tanggal"
+                            )
+                        }
                     )
                     Box {
                         FilterChip(
@@ -311,158 +337,6 @@ fun HistoryScreen(
 
 private val DATE_FORMAT = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun FilterDialog(
-    filterDate: String,
-    onFilterDateChange: (String) -> Unit,
-    filterMutu: String,
-    onFilterMutuChange: (String) -> Unit,
-    filterBatchName: String,
-    onFilterBatchNameChange: (String) -> Unit,
-    onDismiss: () -> Unit,
-    onReset: () -> Unit
-) {
-    var mutuExpanded by remember { mutableStateOf(false) }
-    var showDatePicker by remember { mutableStateOf(false) }
-    val initialMillis = remember(filterDate) {
-        if (filterDate.isNotBlank()) {
-            try {
-                DATE_FORMAT.parse(filterDate)?.time
-            } catch (_: Exception) { null }
-        } else null
-    }
-    val datePickerState = rememberDatePickerState(
-        initialSelectedDateMillis = initialMillis,
-        yearRange = (2020..2030)
-    )
-
-    if (showDatePicker) {
-        DatePickerDialog(
-            onDismissRequest = { showDatePicker = false },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        datePickerState.selectedDateMillis?.let { millis ->
-                            onFilterDateChange(DATE_FORMAT.format(Date(millis)))
-                        }
-                        showDatePicker = false
-                    }
-                ) {
-                    Text("OK")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showDatePicker = false }) {
-                    Text("Batal")
-                }
-            }
-        ) {
-            DatePicker(state = datePickerState)
-        }
-    }
-
-    Dialog(onDismissRequest = onDismiss) {
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            shape = RoundedCornerShape(20.dp),
-            elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
-        ) {
-            Column(
-                modifier = Modifier.padding(20.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                Text(
-                    "Filter Riwayat",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold
-                )
-                OutlinedCard(
-                    onClick = { showDatePicker = true },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column {
-                            Text(
-                                "Tanggal",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Text(
-                                if (filterDate.isNotBlank()) filterDate else "Pilih tanggal",
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = if (filterDate.isNotBlank())
-                                    MaterialTheme.colorScheme.onSurface
-                                else
-                                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                            )
-                        }
-                        Text("📅", style = MaterialTheme.typography.titleMedium)
-                    }
-                }
-                ExposedDropdownMenuBox(
-                    expanded = mutuExpanded,
-                    onExpandedChange = { mutuExpanded = it }
-                ) {
-                    OutlinedTextField(
-                        value = MUTU_OPTIONS.find { it.first == filterMutu }?.second ?: "Semua Mutu",
-                        onValueChange = {},
-                        readOnly = true,
-                        label = { Text("Mutu") },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .menuAnchor(),
-                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = mutuExpanded) }
-                    )
-                    ExposedDropdownMenu(
-                        expanded = mutuExpanded,
-                        onDismissRequest = { mutuExpanded = false }
-                    ) {
-                        MUTU_OPTIONS.forEach { (value, label) ->
-                            DropdownMenuItem(
-                                text = { Text(label) },
-                                onClick = {
-                                    onFilterMutuChange(value)
-                                    mutuExpanded = false
-                                }
-                            )
-                        }
-                    }
-                }
-                OutlinedTextField(
-                    value = filterBatchName,
-                    onValueChange = onFilterBatchNameChange,
-                    label = { Text("Nama Batch") },
-                    placeholder = { Text("Cari nama batch...") },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true
-                )
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    TextButton(onClick = onReset) {
-                        Text("Reset")
-                    }
-                    Spacer(Modifier.width(8.dp))
-                    Button(onClick = onDismiss) {
-                        Text("Terapkan")
-                    }
-                }
-            }
-        }
-    }
-}
-
 @Composable
 private fun HistoryCard(
     item: HistoryItemUi,
@@ -480,13 +354,30 @@ private fun HistoryCard(
                 .padding(14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Thumbnail placeholder
+            // Thumbnail atau placeholder (data tanpa gambar tetap ditampilkan)
             Box(
                 modifier = Modifier
                     .size(70.dp)
                     .clip(RoundedCornerShape(10.dp))
-                    .background(Color.White)
-            )
+                    .background(Color.White),
+                contentAlignment = Alignment.Center
+            ) {
+                when {
+                    item.thumbnailPath != null -> {
+                        val file = File(item.thumbnailPath)
+                        if (file.exists()) {
+                            AsyncImage(
+                                model = file,
+                                contentDescription = "Thumbnail",
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        } else {
+                            Text("—", color = Color.Gray, style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                    else -> Text("—", color = Color.Gray, style = MaterialTheme.typography.bodySmall)
+                }
+            }
 
             Spacer(Modifier.width(12.dp))
 

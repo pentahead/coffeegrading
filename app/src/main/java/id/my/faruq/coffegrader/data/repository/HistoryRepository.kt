@@ -41,7 +41,8 @@ data class HistoryDetailUi(
     val scanDurationMs: Long,
     val officerName: String,
     val defects: List<DefectRowUi>,
-    val sampleInfo: SampleInfoUi? = null
+    val sampleInfo: SampleInfoUi? = null,
+    val imagePath: String? = null
 )
 
 /** Satu baris cacat di tabel detail */
@@ -75,7 +76,9 @@ class HistoryRepository @Inject constructor(
                     dateTime = "08:15 / 2025-11-30",
                     totalBeans = 132,
                     defectScore = 11.0,
-                    gradeText = "1"
+                    gradeText = "1",
+                    imagePath = null,
+                    thumbnailPath = null
                 )
             )
 
@@ -85,7 +88,9 @@ class HistoryRepository @Inject constructor(
                     dateTime = "08:16 / 2025-11-30",
                     totalBeans = 132,
                     defectScore = 33.0,
-                    gradeText = "4a"
+                    gradeText = "4a",
+                    imagePath = null,
+                    thumbnailPath = null
                 )
             )
 
@@ -95,7 +100,9 @@ class HistoryRepository @Inject constructor(
                     dateTime = "08:18 / 2025-11-30",
                     totalBeans = 128,
                     defectScore = 92.0,
-                    gradeText = "5"
+                    gradeText = "5",
+                    imagePath = null,
+                    thumbnailPath = null
                 )
             )
         }
@@ -132,7 +139,8 @@ class HistoryRepository @Inject constructor(
                         scanDurationMs = 0L,
                         officerName = "-",
                         defects = emptyList(),
-                        sampleInfo = sample?.toSampleInfoUi()
+                        sampleInfo = sample?.toSampleInfoUi(),
+                        imagePath = entity.imagePath
                     )
                 )
             } else {

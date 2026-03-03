@@ -43,6 +43,7 @@ private fun ScanHistoryEntity.toScanHistoryItem(): ScanHistoryItem {
         batchName = batchName,
         dateTimeText = dateTimeText.ifEmpty { dateTime },
         gradeText = gradeText,
-        gradeColor = gradeColor
+        gradeColor = gradeColor,
+        thumbnailPath = thumbnailPath
     )
 }

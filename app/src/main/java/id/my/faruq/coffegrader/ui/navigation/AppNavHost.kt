@@ -1,5 +1,7 @@
 package id.my.faruq.coffegrader.ui.navigation
 
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.runtime.Composable
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
@@ -13,6 +15,7 @@ import id.my.faruq.coffegrader.ui.history.HistoryViewModel
 import id.my.faruq.coffegrader.ui.home.HomeScreen
 import id.my.faruq.coffegrader.ui.sample.SampleInputScreen
 import id.my.faruq.coffegrader.ui.sample.SampleInputViewModel
+import id.my.faruq.coffegrader.ui.tutorial.TutorialScreen
 
 object Routes {
     const val HOME = "home"
@@ -22,6 +25,8 @@ object Routes {
     const val HISTORY = "history"
     const val ABOUT = "about"
     const val HISTORY_DETAIL = "history_detail"
+    const val TUTORIAL = "tutorial"
+
 }
 
 @Composable
@@ -30,7 +35,11 @@ fun AppNavHost(
 ) {
     NavHost(
         navController = navController,
-        startDestination = Routes.HOME
+        startDestination = Routes.HOME,
+        enterTransition = { EnterTransition.None },
+        exitTransition = { ExitTransition.None },
+        popEnterTransition = { EnterTransition.None },
+        popExitTransition = { ExitTransition.None }
     ) {
 
         // ================= HOME =================
@@ -46,7 +55,9 @@ fun AppNavHost(
                 },
                 onOpenHistoryDetail = { scanId ->
                     navController.navigate("${Routes.HISTORY_DETAIL}/$scanId")
-                }
+                },
+                onGoToTutorial = { navController.navigate(Routes.TUTORIAL) }
+
             )
         }
 
@@ -124,5 +135,19 @@ fun AppNavHost(
                 onBack = { navController.popBackStack() }
             )
         }
+        // ================= TUTORIAL =================
+        composable(Routes.TUTORIAL) {
+            TutorialScreen(
+                onBack = { navController.popBackStack() },
+                onStartScan = {
+                    navController.navigate(Routes.SAMPLE_INPUT) {
+                        popUpTo(Routes.TUTORIAL) { inclusive = true }
+                    }
+                }
+            )
+        }
+    
+
+
     }
 }

@@ -20,6 +20,8 @@ class ScanViewModel @Inject constructor(
         batchName: String,
         totalBeans: Int,
         sampleInfoId: Long? = null,
+        imagePath: String? = null,
+        thumbnailPath: String? = null,
         onDone: (Long) -> Unit
     ) {
         viewModelScope.launch {
@@ -66,7 +68,7 @@ class ScanViewModel @Inject constructor(
 
 
 
-            //  simpan ke database
+            //  simpan ke database (termasuk path gambar & thumbnail)
             val historyId = repository.saveScanResult(
                 batchName = batchName,
                 dateTime = dateTime,
@@ -74,7 +76,9 @@ class ScanViewModel @Inject constructor(
                 defectScore = defectScore,
                 gradeText = gradeText,
                 defects = defects,
-                sampleInfoId = sampleInfoId
+                sampleInfoId = sampleInfoId,
+                imagePath = imagePath,
+                thumbnailPath = thumbnailPath
             )
 
             onDone(historyId)

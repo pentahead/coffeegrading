@@ -41,6 +41,8 @@ import java.util.*
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Matrix
+import android.media.ExifInterface
 import androidx.compose.animation.core.rememberInfiniteTransition
 
 import androidx.compose.foundation.Image
@@ -49,6 +51,7 @@ import androidx.compose.foundation.background
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -64,11 +67,17 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.border
 import androidx.compose.material.icons.filled.FlashOn
 import androidx.compose.material.icons.filled.FlashOff
 import androidx.hilt.navigation.compose.hiltViewModel
 import id.my.faruq.coffegrader.ui.scan.ScanViewModel
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.rememberCoroutineScope
+import java.io.FileOutputStream
 
 
 
@@ -129,6 +138,7 @@ fun CameraScreen(
     val cameraVm: CameraViewModel = hiltViewModel()
     val scanVm: ScanViewModel = hiltViewModel()
     val batchName by cameraVm.batchName.collectAsState()
+    val scope = rememberCoroutineScope()
 
     var showGuideDialog by remember(sampleInfoId) { mutableStateOf(sampleInfoId != null) }
 
@@ -436,24 +446,40 @@ fun CameraScreen(
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         OutlinedButton(
-                            onClick = { capturedBitmap = null }
+                            onClick = { capturedBitmap = null },
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                containerColor = Color.White,
+                                contentColor = Color.Black
+                            ),
+                            border = BorderStroke(2.dp, Color(0xFFB7F23A)),
+                            shape = RoundedCornerShape(12.dp)
                         ) {
-                            Text("Tutup Preview")
+                            Text("Tutup Preview", fontWeight = FontWeight.SemiBold)
                         }
                         Button(
                             onClick = {
                                 val name = batchName.ifBlank { "Sampel" }
-                                scanVm.finishScan(
-                                    batchName = name,
-                                    totalBeans = 100,
-                                    sampleInfoId = sampleInfoId,
-                                    onDone = { historyId ->
-                                        onSaveAndShowDetail(historyId)
-                                    }
-                                )
-                            }
+                                scope.launch {
+                                    val (imagePath, thumbnailPath) = saveBitmapAndThumbnail(context, bmp)
+                                    scanVm.finishScan(
+                                        batchName = name,
+                                        totalBeans = 100,
+                                        sampleInfoId = sampleInfoId,
+                                        imagePath = imagePath,
+                                        thumbnailPath = thumbnailPath,
+                                        onDone = { historyId ->
+                                            onSaveAndShowDetail(historyId)
+                                        }
+                                    )
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Color(0xFFB7F23A),
+                                contentColor = Color.Black
+                            ),
+                            shape = RoundedCornerShape(12.dp)
                         ) {
-                            Text("Simpan & Lihat Hasil")
+                            Text("Simpan & Lihat Hasil", fontWeight = FontWeight.SemiBold)
                         }
                     }
             }
@@ -461,6 +487,54 @@ fun CameraScreen(
     }
 
 
+
+/** Simpan gambar penuh + thumbnail ke folder scans; return (imagePath, thumbnailPath) */
+private suspend fun saveBitmapAndThumbnail(context: Context, bitmap: Bitmap): Pair<String?, String?> {
+    return withContext(Dispatchers.IO) {
+        val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(System.currentTimeMillis())
+        val scansDir = File(context.filesDir, "scans").apply { if (!exists()) mkdirs() }
+        val imageFile = File(scansDir, "img_$timestamp.jpg")
+        val thumbFile = File(scansDir, "thumb_$timestamp.jpg")
+        try {
+            FileOutputStream(imageFile).use { out ->
+                bitmap.compress(Bitmap.CompressFormat.JPEG, 90, out)
+            }
+            val maxThumb = 400
+            val scale = minOf(maxThumb.toFloat() / bitmap.width, maxThumb.toFloat() / bitmap.height).coerceAtMost(1f)
+            val thumbW = (bitmap.width * scale).toInt().coerceAtLeast(1)
+            val thumbH = (bitmap.height * scale).toInt().coerceAtLeast(1)
+            val thumb = Bitmap.createScaledBitmap(bitmap, thumbW, thumbH, true)
+            FileOutputStream(thumbFile).use { out ->
+                thumb.compress(Bitmap.CompressFormat.JPEG, 85, out)
+            }
+            if (thumb != bitmap) thumb.recycle()
+            Pair(imageFile.absolutePath, thumbFile.absolutePath)
+        } catch (e: Exception) {
+            android.util.Log.e("CameraScreen", "Save image failed", e)
+            Pair(null, null)
+        }
+    }
+}
+
+/** Rotasi bitmap sesuai EXIF orientation agar tampil tegak sesuai perangkat */
+private fun rotateBitmapByExif(bitmap: Bitmap, path: String): Bitmap {
+    val exif = ExifInterface(path)
+    val orientation = exif.getAttributeInt(
+        ExifInterface.TAG_ORIENTATION,
+        ExifInterface.ORIENTATION_NORMAL
+    )
+    val degrees = when (orientation) {
+        ExifInterface.ORIENTATION_ROTATE_90 -> 90f
+        ExifInterface.ORIENTATION_ROTATE_180 -> 180f
+        ExifInterface.ORIENTATION_ROTATE_270 -> 270f
+        else -> 0f
+    }
+    if (degrees == 0f) return bitmap
+    val matrix = Matrix().apply { postRotate(degrees) }
+    return Bitmap.createBitmap(
+        bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true
+    )
+}
 
 private fun capturePhotoToBitmap(
     context: Context,
@@ -483,10 +557,11 @@ private fun capturePhotoToBitmap(
             override fun onImageSaved(
                 outputFileResults: ImageCapture.OutputFileResults
             ) {
-                val bitmap =
+                var bitmap =
                     BitmapFactory.decodeFile(photoFile.absolutePath)
 
                 if (bitmap != null) {
+                    bitmap = rotateBitmapByExif(bitmap, photoFile.absolutePath)
                     onBitmapReady(bitmap)
                 } else {
                     Toast.makeText(

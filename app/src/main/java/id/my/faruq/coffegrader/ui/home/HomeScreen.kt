@@ -28,14 +28,16 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.hilt.navigation.compose.hiltViewModel
 import id.my.faruq.coffegrader.R
 import id.my.faruq.coffegrader.util.GradeColors
+import coil.compose.AsyncImage
+import java.io.File
 // ===== Model untuk item scan di carousel =====
 data class ScanHistoryItem(
     val id: String,
     val batchName: String,
     val dateTimeText: String,
     val gradeText: String,
-    val gradeColor: Color
-    // nanti tambah: thumbnailUri/path
+    val gradeColor: Color,
+    val thumbnailPath: String? = null
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -44,6 +46,7 @@ fun HomeScreen(
     onGoToCamera: () -> Unit,
     onGoToHistory: () -> Unit,
     onGoToAbout: () -> Unit,
+    onGoToTutorial: () -> Unit,
     onRefreshHome: () -> Unit,
     onOpenHistoryDetail: (String) -> Unit,
     vm: HomeViewModel = hiltViewModel()
@@ -115,6 +118,16 @@ fun HomeScreen(
                     contentScale = ContentScale.Fit
                 )
             }
+
+// ===== Tutorial Scan bar =====
+Spacer(Modifier.height(12.dp))
+
+TutorialScanRow(
+    onClick = {
+       onGoToTutorial() 
+    },
+    modifier = Modifier.padding(horizontal = 16.dp)
+)
 
 
             // ===== Scan button panel =====
@@ -223,21 +236,42 @@ private fun HistoryCarouselCard(
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column {
-            // Area gambar (putih) - ~60–70% tinggi kartu
+            // Area gambar: thumbnail scan atau placeholder
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(100.dp)
                     .background(Color.White)
             ) {
-                Image(
-                    painter = painterResource(R.drawable.bgilustrasi),
-                    contentDescription = null,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(8.dp),
-                    contentScale = ContentScale.Crop
-                )
+                if (item.thumbnailPath != null) {
+                    val file = File(item.thumbnailPath)
+                    if (file.exists()) {
+                        AsyncImage(
+                            model = file,
+                            contentDescription = null,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(8.dp),
+                            contentScale = ContentScale.Crop
+                        )
+                    } else {
+                        Image(
+                            painter = painterResource(R.drawable.bgilustrasi),
+                            contentDescription = null,
+                            modifier = Modifier.fillMaxSize().padding(8.dp),
+                            contentScale = ContentScale.Crop
+                        )
+                    }
+                } else {
+                    Image(
+                        painter = painterResource(R.drawable.bgilustrasi),
+                        contentDescription = null,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(8.dp),
+                        contentScale = ContentScale.Crop
+                    )
+                }
             }
 
             // Area info (hijau): batch, tanggal, lingkaran mutu di kanan (tidak nabrak)
@@ -286,6 +320,72 @@ private fun HistoryCarouselCard(
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun TutorialScanRow(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        onClick = onClick,
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = Color.White
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+
+            // Icon tutorial
+            Box(
+                modifier = Modifier
+                    .size(38.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xFFB7F23A)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Info,
+                    contentDescription = "Tutorial",
+                    tint = Color.Black,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+
+            Spacer(Modifier.width(12.dp))
+
+            // Text tutorial
+            Column(
+                modifier = Modifier.weight(1f)
+            ) {
+                Text(
+                    text = "Tutorial Scan",
+                    fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                Text(
+                    text = "Pelajari cara scan biji kopi yang benar sesuai SNI",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.Gray
+                )
+            }
+
+            // Arrow
+            Icon(
+                imageVector = Icons.Default.CenterFocusStrong,
+                contentDescription = "Go",
+                tint = Color.Gray,
+                modifier = Modifier.size(18.dp)
+            )
         }
     }
 }

@@ -24,7 +24,10 @@ data class ScanHistoryEntity(
     // Mutu hasil grading (1,2,3,4a,...)
     val gradeText: String,
 
-    // Thumbnail path optional
+    // Path gambar asli (untuk ML & preview di detail)
+    val imagePath: String? = null,
+
+    // Path thumbnail (untuk list & carousel)
     val thumbnailPath: String? = null,
 
     // ID sampel (info SNI) yang diisi sebelum scan

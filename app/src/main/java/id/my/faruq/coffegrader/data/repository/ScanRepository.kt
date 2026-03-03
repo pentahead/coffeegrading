@@ -13,7 +13,7 @@ class ScanRepository @Inject constructor(
     private val defectDao: ScanDefectDao
 ) {
 
-    // ✅ Simpan hasil scan baru (sampleInfoId = ID sampel yang diisi sebelum scan)
+    // ✅ Simpan hasil scan baru (sampleInfoId = ID sampel, imagePath/thumbnailPath dari capture)
     suspend fun saveScanResult(
         batchName: String,
         dateTime: String,
@@ -21,7 +21,9 @@ class ScanRepository @Inject constructor(
         defectScore: Double,
         gradeText: String,
         defects: List<ScanDefectEntity>,
-        sampleInfoId: Long? = null
+        sampleInfoId: Long? = null,
+        imagePath: String? = null,
+        thumbnailPath: String? = null
     ): Long {
 
         // 1. Insert history dulu
@@ -32,6 +34,8 @@ class ScanRepository @Inject constructor(
                 totalBeans = totalBeans,
                 defectScore = defectScore,
                 gradeText = gradeText,
+                imagePath = imagePath,
+                thumbnailPath = thumbnailPath,
                 sampleInfoId = sampleInfoId
             )
         )
