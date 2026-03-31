@@ -31,5 +31,8 @@ data class ScanHistoryEntity(
     val thumbnailPath: String? = null,
 
     // ID sampel (info SNI) yang diisi sebelum scan
-    val sampleInfoId: Long? = null
+    val sampleInfoId: Long? = null,
+
+    // Durasi proses scan (ms) - untuk ditampilkan di detail riwayat
+    val scanDurationMs: Long = 0L
 )

@@ -179,6 +179,32 @@ fun CameraScreen(
     }
     //  Bitmap hasil capture
     var capturedBitmap by remember { mutableStateOf<Bitmap?>(null) }
+    var isAnalyzing by remember { mutableStateOf(false) }
+    var lastDetections by remember { mutableStateOf<List<YoloSegDetection>>(emptyList()) }
+    var lastScanDurationMs by remember { mutableStateOf(0L) }
+
+    // Pastikan urutan label sesuai class index di model Anda.
+    // Kalau kelas model Anda lebih dari 2, sisanya akan otomatis jadi `class_{index}`.
+    val labels = listOf(
+        "broken",
+        "foreign_matter",
+        "full_black",
+        "full_sour",
+        "fungus",
+        "good",
+        "immature",
+        "insect_severe",
+        "insect_slight",
+        "partial_black",
+        "partial_sour",
+        "withered",
+    )
+    val segmenter = remember { YoloSegmentationTflite(context = context, labels = labels) }
+    DisposableEffect(Unit) {
+        onDispose {
+            segmenter.close()
+        }
+    }
 
     val modelBoxes = listOf(
         ModelBox(80f, 120f, 260f, 360f, "Broken Bean"),
@@ -248,38 +274,7 @@ fun CameraScreen(
                 )
 
                 // 2) Overlay deteksi (Canvas)
-                Canvas(modifier = Modifier.fillMaxSize()) {
-                    val screenBoxes = mapBoxesToScreen(
-                        modelBoxes = modelBoxes,
-                        modelWidth = 640f,
-                        modelHeight = 640f,
-                        canvasWidth = size.width,
-                        canvasHeight = size.height
-                    )
-
-                    screenBoxes.forEach { box ->
-                        drawRect(
-                            color = Color.Green,
-                            topLeft = androidx.compose.ui.geometry.Offset(box.left, box.top),
-                            size = androidx.compose.ui.geometry.Size(
-                                box.right - box.left,
-                                box.bottom - box.top
-                            ),
-                            style = androidx.compose.ui.graphics.drawscope.Stroke(width = 4f)
-                        )
-
-                        drawContext.canvas.nativeCanvas.drawText(
-                            box.label,
-                            box.left,
-                            box.top - 10f,
-                            android.graphics.Paint().apply {
-                                color = android.graphics.Color.GREEN
-                                textSize = 36f
-                                isFakeBoldText = true
-                            }
-                        )
-                    }
-                }
+                // NOTE: bounding box hijau dummy dihapus.
 
                 // 3) Mask gelap di luar grid + 4) Grid putih (di atas kamera)
                 val gridSizeFraction = 0.75f
@@ -400,14 +395,45 @@ fun CameraScreen(
                         capturePhotoToBitmap(
                             context = context,
                             imageCapture = imageCapture,
-                            onBitmapReady = { bmp -> capturedBitmap = bmp }
+                            onBitmapReady = { bmp ->
+                                scope.launch {
+                                    isAnalyzing = true
+                                    try {
+                                        val scanStart = System.currentTimeMillis()
+                                        val result = withContext(Dispatchers.Default) {
+                                            segmenter.segment(
+                                                bitmap = bmp,
+                                                maxDetections = 20
+                                            )
+                                        }
+                                        lastScanDurationMs = System.currentTimeMillis() - scanStart
+                                        lastDetections = result.detections
+                                        capturedBitmap = result.overlay
+                                    } catch (e: Exception) {
+                                        android.util.Log.e("CameraScreen", "Segmentation failed", e)
+                                        capturedBitmap = bmp
+                                        lastDetections = emptyList()
+                                        lastScanDurationMs = 0L
+                                    } finally {
+                                        isAnalyzing = false
+                                    }
+                                }
+                            }
                         )
                     },
                     modifier = Modifier
                         .size(64.dp)
                         .background(Color(0xFF7CFF00), shape = CircleShape)
                 ) {
-                    Icon(Icons.Default.Camera, contentDescription = "Capture")
+                    if (isAnalyzing) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(28.dp),
+                            color = Color.Black,
+                            strokeWidth = 3.dp
+                        )
+                    } else {
+                        Icon(Icons.Default.Camera, contentDescription = "Capture")
+                    }
                 }
 
                 if (hasFlash) {
@@ -461,9 +487,13 @@ fun CameraScreen(
                                 val name = batchName.ifBlank { "Sampel" }
                                 scope.launch {
                                     val (imagePath, thumbnailPath) = saveBitmapAndThumbnail(context, bmp)
-                                    scanVm.finishScan(
+                                    val totalBeansDetected = lastDetections.size
+                                    val classIndices = lastDetections.map { it.classIndex }
+                                    scanVm.finishScanFromMl(
                                         batchName = name,
-                                        totalBeans = 100,
+                                        totalBeans = totalBeansDetected,
+                                        detectedClassIndices = classIndices,
+                                        scanDurationMs = lastScanDurationMs,
                                         sampleInfoId = sampleInfoId,
                                         imagePath = imagePath,
                                         thumbnailPath = thumbnailPath,

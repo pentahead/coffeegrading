@@ -136,7 +136,7 @@ class HistoryRepository @Inject constructor(
                         defectiveBeans = 0,
                         defectScoreTotal = entity.defectScore,
                         dominantDefect = "-",
-                        scanDurationMs = 0L,
+                        scanDurationMs = entity.scanDurationMs,
                         officerName = "-",
                         defects = emptyList(),
                         sampleInfo = sample?.toSampleInfoUi(),

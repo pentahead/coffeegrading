@@ -20,6 +20,7 @@ class ScanRepository @Inject constructor(
         totalBeans: Int,
         defectScore: Double,
         gradeText: String,
+        scanDurationMs: Long,
         defects: List<ScanDefectEntity>,
         sampleInfoId: Long? = null,
         imagePath: String? = null,
@@ -36,7 +37,8 @@ class ScanRepository @Inject constructor(
                 gradeText = gradeText,
                 imagePath = imagePath,
                 thumbnailPath = thumbnailPath,
-                sampleInfoId = sampleInfoId
+                sampleInfoId = sampleInfoId,
+                scanDurationMs = scanDurationMs
             )
         )
 
