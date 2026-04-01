@@ -16,7 +16,21 @@ import java.nio.ByteOrder
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
-import kotlin.math.exp
+
+private fun sigmoid(x: Float): Float {
+    return (1f / (1f + kotlin.math.exp(-x)))
+}
+
+/** Satu deteksi YOLO-seg (bbox piksel letterbox, koef mask 32-d) */
+private data class Detection(
+    val x1: Float,
+    val y1: Float,
+    val x2: Float,
+    val y2: Float,
+    val score: Float,
+    val classIndex: Int,
+    val coeffs: FloatArray,
+)
 
 data class YoloSegDetection(
     val classIndex: Int,
@@ -29,13 +43,10 @@ data class YoloSegmentationResult(
 )
 
 /**
- * Loader + decoder sederhana untuk YOLO-seg export TFLite:
- * - Output 1: detection + mask coeff (mis. [1,48,8400] atau [1,8400,48])
+ * Loader + decoder untuk YOLOv8/YOLO11-seg TFLite (tanpa NMS di graf):
+ * - Output 1: [1, C, N] atau [1, N, C] — C = 4 (cx,cy,w,h) + numClasses + 32 (mask coeff)
  * - Output 2: prototype masks (mis. [1,32,160,160])
- *
- * Catatan:
- * - Decode bbox di sini memakai heuristic. Kalau bbox hasilnya salah (mis. tidak berada di area objek),
- *   Anda perlu menyesuaikan format decode sesuai script export model Anda (YOLOv8 raw vs already-decoded).
+ * - Skor kelas: sigmoid(logit); NMS setelah filter conf; bbox center → xyxy piksel letterbox.
  */
 class YoloSegmentationTflite(
     context: Context,
@@ -79,10 +90,10 @@ class YoloSegmentationTflite(
 
     fun segment(
         bitmap: Bitmap,
-        confThreshold: Float = 0.25f,
+        confThreshold: Float = 0.4f,
         iouThreshold: Float = 0.5f,
         maskThreshold: Float = 0.5f,
-        maxDetections: Int = 5,
+        maxDetections: Int = 50,
         maskAlpha: Int = 120,
     ): YoloSegmentationResult {
         if (bitmap.width <= 0 || bitmap.height <= 0) {
@@ -180,90 +191,40 @@ class YoloSegmentationTflite(
             throw IllegalStateException("Unexpected detect dims: ${outDetectShape.contentToString()} (expected channels=48)")
         }
 
-        // Asumsi layout (umum untuk YOLO-seg):
-        // [0..3]=bbox (cx,cy,w,h), [4]=obj, [5..(5+nc-1)]=class scores,
-        // [(channels-maskDim)..(channels-1)]=mask coeff
-        val objIndex = 4
-        val classStart = 5
-        val maskCoeffStart = detectChannels - maskDim
-        val classCount = (maskCoeffStart - classStart).coerceAtLeast(0)
-        if (maskCoeffStart <= objIndex + 1) {
-            Log.w(logTag, "Layout inference: maskCoeffStart=$maskCoeffStart classCount=$classCount maskDim=$maskDim")
-        }
-
-        fun detectAt(channel: Int, pos: Int): Float {
-            // detect[channel][pos] jika detectChannelsDimIs1=true, kalau tidak kebalik
-            return if (detectChannelsDimIs1) detect[0][channel][pos] else detect[0][pos][channel]
-        }
-
-        val candidates = ArrayList<Candidate>(maxDetections * 3)
-        val samplePositions = min(200, detectPositions)
-
-        // Heuristic bbox normalized check (berdasarkan sebagian sampel)
-        var bboxLooksNormalized = true
-        for (p in 0 until samplePositions) {
-            val cx = detectAt(0, p)
-            val cy = detectAt(1, p)
-            val w = detectAt(2, p)
-            val h = detectAt(3, p)
-            val maybe = (cx in 0f..1.5f && cy in 0f..1.5f && w in 0f..1.5f && h in 0f..1.5f)
-            bboxLooksNormalized = bboxLooksNormalized && maybe
-        }
-
-        for (pos in 0 until detectPositions) {
-            val cxRaw = detectAt(0, pos)
-            val cyRaw = detectAt(1, pos)
-            val wRaw = detectAt(2, pos)
-            val hRaw = detectAt(3, pos)
-
-            val cx = if (bboxLooksNormalized) cxRaw * inputW else cxRaw
-            val cy = if (bboxLooksNormalized) cyRaw * inputH else cyRaw
-            val w = if (bboxLooksNormalized) wRaw * inputW else wRaw
-            val h = if (bboxLooksNormalized) hRaw * inputH else hRaw
-
-            val obj = sigmoid(detectAt(objIndex, pos))
-            var bestCls = -1
-            var bestClsProb = 0f
-            for (c in 0 until classCount) {
-                val prob = sigmoid(detectAt(classStart + c, pos))
-                if (prob > bestClsProb) {
-                    bestClsProb = prob
-                    bestCls = c
-                }
-            }
-
-            val score = obj * bestClsProb
-            if (score < confThreshold || bestCls < 0) continue
-
-            val left = cx - w / 2f
-            val top = cy - h / 2f
-            val right = cx + w / 2f
-            val bottom = cy + h / 2f
-
-            // Simpan mask coeff
-            val coeff = FloatArray(maskDim)
-            for (m in 0 until maskDim) {
-                coeff[m] = detectAt(maskCoeffStart + m, pos)
-            }
-
-            candidates.add(
-                Candidate(
-                    left = left,
-                    top = top,
-                    right = right,
-                    bottom = bottom,
-                    classIndex = bestCls,
-                    score = score,
-                    maskCoeff = coeff
-                )
+        // YOLOv8/YOLO11 TFLite seg (tanpa NMS): [0..3]=cx,cy,w,h; [4..4+nc-1]=class logits;
+        // [4+nc ..]=mask coefficients (32)
+        val classStart = 4
+        val numClasses = (detectChannels - 4 - maskDim).coerceAtLeast(0)
+        val maskCoeffStart = 4 + numClasses
+        if (numClasses <= 0 || maskCoeffStart + maskDim > detectChannels) {
+            Log.w(
+                logTag,
+                "Layout: detectChannels=$detectChannels numClasses=$numClasses maskDim=$maskDim maskCoeffStart=$maskCoeffStart"
             )
         }
 
-        if (candidates.isEmpty()) {
+        fun detectAt(channel: Int, pos: Int): Float {
+            return if (detectChannelsDimIs1) detect[0][channel][pos] else detect[0][pos][channel]
+        }
+
+        val detections = detect(
+            detectAt = ::detectAt,
+            numPreds = detectPositions,
+            numClasses = numClasses,
+            maskDim = maskDim,
+            maskCoeffStart = maskCoeffStart,
+            inputWidth = inputW,
+            inputHeight = inputH,
+            confThreshold = confThreshold,
+            iouThreshold = iouThreshold,
+            maxDetections = maxDetections,
+        )
+
+        if (detections.isEmpty()) {
             return YoloSegmentationResult(overlay = bitmap, detections = emptyList())
         }
 
-        val kept = nms(candidates, iouThreshold, maxDetections)
+        val kept = detections
         Log.d(logTag, "Kept detections: ${kept.size}")
 
         val overlay = bitmap.copy(Bitmap.Config.ARGB_8888, true)
@@ -287,11 +248,11 @@ class YoloSegmentationTflite(
             val maskOn = when (protoLayout) {
                 ProtoLayout.NCHW -> {
                     val protoNchw = protoOutput as Array<Array<Array<FloatArray>>>
-                    generateMask160FromNchw(protoNchw, det.maskCoeff, protoH, protoW, maskThreshold)
+                    generateMask160FromNchw(protoNchw, det.coeffs, protoH, protoW, maskThreshold)
                 }
                 ProtoLayout.NHWC -> {
                     val protoNhwc = protoOutput as Array<Array<Array<FloatArray>>>
-                    generateMask160FromNhwc(protoNhwc, det.maskCoeff, protoH, protoW, maskThreshold)
+                    generateMask160FromNhwc(protoNhwc, det.coeffs, protoH, protoW, maskThreshold)
                 }
             }
 
@@ -299,10 +260,10 @@ class YoloSegmentationTflite(
             val maskBitmapInput = Bitmap.createScaledBitmap(maskBitmap, inputW, inputH, false)
 
             // Crop mask ke bbox (di ruang input/letterbox)
-            val leftI = det.left.roundToInt().coerceIn(0, inputW - 1)
-            val topI = det.top.roundToInt().coerceIn(0, inputH - 1)
-            val rightI = det.right.roundToInt().coerceIn(leftI + 1, inputW)
-            val bottomI = det.bottom.roundToInt().coerceIn(topI + 1, inputH)
+            val leftI = det.x1.roundToInt().coerceIn(0, inputW - 1)
+            val topI = det.y1.roundToInt().coerceIn(0, inputH - 1)
+            val rightI = det.x2.roundToInt().coerceIn(leftI + 1, inputW)
+            val bottomI = det.y2.roundToInt().coerceIn(topI + 1, inputH)
 
             val cropW = rightI - leftI
             val cropH = bottomI - topI
@@ -327,10 +288,10 @@ class YoloSegmentationTflite(
 
     fun segmentToOverlay(
         bitmap: Bitmap,
-        confThreshold: Float = 0.25f,
+        confThreshold: Float = 0.4f,
         iouThreshold: Float = 0.5f,
         maskThreshold: Float = 0.5f,
-        maxDetections: Int = 5,
+        maxDetections: Int = 50,
         maskAlpha: Int = 120,
     ): Bitmap {
         return segment(
@@ -444,57 +405,120 @@ class YoloSegmentationTflite(
         return min(1, interpreter.outputTensorCount - 1)
     }
 
-    private data class Candidate(
-        val left: Float,
-        val top: Float,
-        val right: Float,
-        val bottom: Float,
-        val classIndex: Int,
-        val score: Float,
-        val maskCoeff: FloatArray
-    )
+    private fun iouDet(a: Detection, b: Detection): Float {
+        val x1 = maxOf(a.x1, b.x1)
+        val y1 = maxOf(a.y1, b.y1)
+        val x2 = minOf(a.x2, b.x2)
+        val y2 = minOf(a.y2, b.y2)
 
-    private fun nms(
-        candidates: List<Candidate>,
-        iouThreshold: Float,
-        maxDet: Int
-    ): List<Candidate> {
-        val sorted = candidates.sortedByDescending { it.score }
-        val picked = ArrayList<Candidate>(maxDet)
-        for (cand in sorted) {
-            var keep = true
-            for (p in picked) {
-                val iou = iou(cand, p)
-                if (iou > iouThreshold) {
-                    keep = false
-                    break
+        val interArea = maxOf(0f, x2 - x1) * maxOf(0f, y2 - y1)
+        val areaA = (a.x2 - a.x1) * (a.y2 - a.y1)
+        val areaB = (b.x2 - b.x1) * (b.y2 - b.y1)
+
+        return interArea / (areaA + areaB - interArea + 1e-6f)
+    }
+
+    private fun nmsDetections(detections: List<Detection>, iouThreshold: Float): List<Detection> {
+        val sorted = detections.sortedByDescending { it.score }.toMutableList()
+        val result = mutableListOf<Detection>()
+
+        while (sorted.isNotEmpty()) {
+            val best = sorted.removeAt(0)
+            result.add(best)
+
+            val iterator = sorted.iterator()
+            while (iterator.hasNext()) {
+                val d = iterator.next()
+                if (iouDet(best, d) > iouThreshold) {
+                    iterator.remove()
                 }
             }
-            if (keep) {
-                picked.add(cand)
-                if (picked.size >= maxDet) break
-            }
         }
-        return picked
+        return result
     }
 
-    private fun iou(a: Candidate, b: Candidate): Float {
-        val interLeft = max(a.left, b.left)
-        val interTop = max(a.top, b.top)
-        val interRight = min(a.right, b.right)
-        val interBottom = min(a.bottom, b.bottom)
+    /**
+     * Decode raw YOLOv8/YOLO11-seg TFLite: layout [1, C, N] dengan C = 4 + numClasses + 32.
+     * Skor kelas pakai sigmoid; bbox center (cx,cy,w,h) → xyxy piksel letterbox.
+     */
+    private fun detect(
+        detectAt: (channel: Int, pos: Int) -> Float,
+        numPreds: Int,
+        numClasses: Int,
+        maskDim: Int,
+        maskCoeffStart: Int,
+        inputWidth: Int,
+        inputHeight: Int,
+        confThreshold: Float,
+        iouThreshold: Float,
+        maxDetections: Int,
+    ): List<Detection> {
+        if (numClasses <= 0) return emptyList()
 
-        val interW = max(0f, interRight - interLeft)
-        val interH = max(0f, interBottom - interTop)
-        val interArea = interW * interH
+        val classStart = 4
+        val detections = mutableListOf<Detection>()
 
-        val areaA = max(0f, a.right - a.left) * max(0f, a.bottom - a.top)
-        val areaB = max(0f, b.right - b.left) * max(0f, b.bottom - b.top)
-        val union = areaA + areaB - interArea
-        return if (union <= 0f) 0f else interArea / union
+        for (i in 0 until numPreds) {
+            val cx = detectAt(0, i)
+            val cy = detectAt(1, i)
+            val w = detectAt(2, i)
+            val h = detectAt(3, i)
+
+            var bestScore = -1f
+            var bestClass = -1
+
+            for (c in 0 until numClasses) {
+                val score = sigmoid(detectAt(classStart + c, i))
+                if (score > bestScore) {
+                    bestScore = score
+                    bestClass = c
+                }
+            }
+
+            if (bestScore < confThreshold || bestClass < 0) continue
+            if (w <= 0f || h <= 0f) continue
+
+            val looksNormalized = cx <= 10f && cy <= 10f
+            if (looksNormalized && (w > 1.5f || h > 1.5f)) continue
+            if (!looksNormalized && (w > inputWidth * 2f || h > inputHeight * 2f)) continue
+
+            val x1: Float
+            val y1: Float
+            val x2: Float
+            val y2: Float
+            if (looksNormalized) {
+                x1 = (cx - w / 2f) * inputWidth
+                y1 = (cy - h / 2f) * inputHeight
+                x2 = (cx + w / 2f) * inputWidth
+                y2 = (cy + h / 2f) * inputHeight
+            } else {
+                x1 = cx - w / 2f
+                y1 = cy - h / 2f
+                x2 = cx + w / 2f
+                y2 = cy + h / 2f
+            }
+
+            val coeffs = FloatArray(maskDim)
+            for (k in 0 until maskDim) {
+                coeffs[k] = detectAt(maskCoeffStart + k, i)
+            }
+
+            detections.add(
+                Detection(
+                    x1 = x1,
+                    y1 = y1,
+                    x2 = x2,
+                    y2 = y2,
+                    score = bestScore,
+                    classIndex = bestClass,
+                    coeffs = coeffs,
+                )
+            )
+        }
+
+        val nmsOut = nmsDetections(detections, iouThreshold)
+        return nmsOut.take(maxDetections)
     }
-
-    private fun sigmoid(x: Float): Float = (1f / (1f + exp(-x.toDouble()).toFloat()))
 
     private fun generateMask160FromNchw(
         protoNchw: Array<Array<Array<FloatArray>>>, // [1, nm, H, W]

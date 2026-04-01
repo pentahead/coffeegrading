@@ -19,6 +19,7 @@ import androidx.compose.material3.CenterAlignedTopAppBar
 import android.Manifest
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.Preview
@@ -35,6 +36,8 @@ import android.widget.Toast
 import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageCaptureException
 import androidx.compose.material.icons.filled.Camera
+import androidx.compose.material.icons.filled.PhotoLibrary
+import android.net.Uri
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.*
@@ -166,7 +169,7 @@ fun CameraScreen(
         }
 
     LaunchedEffect(Unit) {
-        if (!hasCameraPermission) {
+        if (!hasCameraPermission) { 
             permissionLauncher.launch(Manifest.permission.CAMERA)
         }
     }
@@ -203,6 +206,52 @@ fun CameraScreen(
     DisposableEffect(Unit) {
         onDispose {
             segmenter.close()
+        }
+    }
+
+    /** Inferensi YOLO sama untuk kamera dan galeri */
+    val runYoloInference = remember(scope, segmenter) {
+        { bitmap: Bitmap ->
+            scope.launch {
+                isAnalyzing = true
+                try {
+                    val scanStart = System.currentTimeMillis()
+                    val result = withContext(Dispatchers.Default) {
+                        segmenter.segment(bitmap = bitmap)
+                    }
+                    lastScanDurationMs = System.currentTimeMillis() - scanStart
+                    lastDetections = result.detections
+                    capturedBitmap = result.overlay
+                } catch (e: Exception) {
+                    android.util.Log.e("CameraScreen", "Segmentation failed", e)
+                    capturedBitmap = bitmap
+                    lastDetections = emptyList()
+                    lastScanDurationMs = 0L
+                } finally {
+                    isAnalyzing = false
+                }
+            }
+            Unit
+        }
+    }
+
+    val pickImageFromGallery = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia(),
+    ) { uri: Uri? ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            val bitmap = withContext(Dispatchers.IO) {
+                loadBitmapFromUri(context, uri)
+            }
+            if (bitmap == null) {
+                Toast.makeText(
+                    context,
+                    "Gagal memuat gambar dari galeri",
+                    Toast.LENGTH_SHORT,
+                ).show()
+                return@launch
+            }
+            runYoloInference(bitmap)
         }
     }
 
@@ -392,33 +441,24 @@ fun CameraScreen(
 
                 IconButton(
                     onClick = {
+                        pickImageFromGallery.launch(
+                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                        )
+                    },
+                    modifier = Modifier.size(48.dp),
+                ) {
+                    Icon(
+                        Icons.Filled.PhotoLibrary,
+                        contentDescription = "Pilih dari galeri",
+                    )
+                }
+
+                IconButton(
+                    onClick = {
                         capturePhotoToBitmap(
                             context = context,
                             imageCapture = imageCapture,
-                            onBitmapReady = { bmp ->
-                                scope.launch {
-                                    isAnalyzing = true
-                                    try {
-                                        val scanStart = System.currentTimeMillis()
-                                        val result = withContext(Dispatchers.Default) {
-                                            segmenter.segment(
-                                                bitmap = bmp,
-                                                maxDetections = 20
-                                            )
-                                        }
-                                        lastScanDurationMs = System.currentTimeMillis() - scanStart
-                                        lastDetections = result.detections
-                                        capturedBitmap = result.overlay
-                                    } catch (e: Exception) {
-                                        android.util.Log.e("CameraScreen", "Segmentation failed", e)
-                                        capturedBitmap = bmp
-                                        lastDetections = emptyList()
-                                        lastScanDurationMs = 0L
-                                    } finally {
-                                        isAnalyzing = false
-                                    }
-                                }
-                            }
+                            onBitmapReady = runYoloInference,
                         )
                     },
                     modifier = Modifier
@@ -543,6 +583,35 @@ private suspend fun saveBitmapAndThumbnail(context: Context, bitmap: Bitmap): Pa
             android.util.Log.e("CameraScreen", "Save image failed", e)
             Pair(null, null)
         }
+    }
+}
+
+/** Muat bitmap dari Uri galeri + rotasi EXIF (sama seperti decode file kamera). */
+private fun loadBitmapFromUri(context: Context, uri: Uri): Bitmap? {
+    return try {
+        val bitmap = context.contentResolver.openInputStream(uri)?.use { input ->
+            BitmapFactory.decodeStream(input)
+        } ?: return null
+        val exif = context.contentResolver.openInputStream(uri)?.use { ExifInterface(it) }
+        if (exif == null) return bitmap
+        val orientation = exif.getAttributeInt(
+            ExifInterface.TAG_ORIENTATION,
+            ExifInterface.ORIENTATION_NORMAL,
+        )
+        val degrees = when (orientation) {
+            ExifInterface.ORIENTATION_ROTATE_90 -> 90f
+            ExifInterface.ORIENTATION_ROTATE_180 -> 180f
+            ExifInterface.ORIENTATION_ROTATE_270 -> 270f
+            else -> 0f
+        }
+        if (degrees == 0f) return bitmap
+        val matrix = Matrix().apply { postRotate(degrees) }
+        Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true).also {
+            if (it != bitmap) bitmap.recycle()
+        }
+    } catch (e: Exception) {
+        android.util.Log.e("CameraScreen", "loadBitmapFromUri failed", e)
+        null
     }
 }
 
