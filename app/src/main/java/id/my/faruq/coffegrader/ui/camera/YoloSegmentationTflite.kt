@@ -90,10 +90,10 @@ class YoloSegmentationTflite(
 
     fun segment(
         bitmap: Bitmap,
-        confThreshold: Float = 0.4f,
-        iouThreshold: Float = 0.5f,
+        confThreshold: Float = 0.55f,
+        iouThreshold: Float = 0.6f,
         maskThreshold: Float = 0.5f,
-        maxDetections: Int = 50,
+        maxDetections: Int = 150,
         maskAlpha: Int = 120,
     ): YoloSegmentationResult {
         if (bitmap.width <= 0 || bitmap.height <= 0) {
@@ -288,10 +288,10 @@ class YoloSegmentationTflite(
 
     fun segmentToOverlay(
         bitmap: Bitmap,
-        confThreshold: Float = 0.4f,
-        iouThreshold: Float = 0.5f,
+        confThreshold: Float = 0.55f,
+        iouThreshold: Float = 0.6f,
         maskThreshold: Float = 0.5f,
-        maxDetections: Int = 50,
+        maxDetections: Int = 150,
         maskAlpha: Int = 120,
     ): Bitmap {
         return segment(
@@ -497,6 +497,9 @@ class YoloSegmentationTflite(
                 x2 = cx + w / 2f
                 y2 = cy + h / 2f
             }
+
+            val area = (x2 - x1) * (y2 - y1)
+            if (area < 200f) continue
 
             val coeffs = FloatArray(maskDim)
             for (k in 0 until maskDim) {
