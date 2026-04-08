@@ -229,6 +229,18 @@ private fun ScanBigButton(
             modifier = Modifier.fillMaxSize(),
             contentAlignment = Alignment.Center
         ) {
+            Image(
+                painter = painterResource(R.drawable.cekkopiimg),
+                contentDescription = "Scan Background",
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
+            )
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.4f))
+            )
+
             // 2. Lingkaran Gelombang (Digambar di belakang tombol)
             Canvas(modifier = Modifier.size(120.dp)) {
                 drawCircle(
@@ -462,9 +474,8 @@ private fun SniInfoCard(
                     .height(120.dp)
                     .background(Color.White)
             ) {
-                // Sementara pakai drawable lokal. Nanti bisa diganti dengan resource/path gambar SNI yang Anda kirim.
                 Image(
-                    painter = painterResource(R.drawable.bgilustrasi),
+                    painter = painterResource(R.drawable.sniimg),
                     contentDescription = "SNI Card",
                     modifier = Modifier
                         .fillMaxSize()
