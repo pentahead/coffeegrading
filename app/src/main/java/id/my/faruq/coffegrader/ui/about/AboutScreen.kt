@@ -101,7 +101,7 @@ fun AboutScreen(
             }
 
             // --- Info Teknis & Pengembang ---
-            AboutSection(title = "Informasi Tambahan") {
+            AboutSection(title = "Informasi Pengembang") {
                 InfoRow(Icons.Default.Person, "Dhiyaul Faruq", "Universitas Jember")
                 Spacer(modifier = Modifier.height(8.dp))
                 InfoRow(Icons.Default.Email, "Kontak", "faruq.xtkj1.simdig@gmail.com")

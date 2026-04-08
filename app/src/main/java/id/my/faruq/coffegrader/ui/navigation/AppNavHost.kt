@@ -15,6 +15,7 @@ import id.my.faruq.coffegrader.ui.history.HistoryViewModel
 import id.my.faruq.coffegrader.ui.home.HomeScreen
 import id.my.faruq.coffegrader.ui.sample.SampleInputScreen
 import id.my.faruq.coffegrader.ui.sample.SampleInputViewModel
+import id.my.faruq.coffegrader.ui.sni.SniStandardScreen
 import id.my.faruq.coffegrader.ui.tutorial.TutorialScreen
 
 object Routes {
@@ -26,6 +27,7 @@ object Routes {
     const val ABOUT = "about"
     const val HISTORY_DETAIL = "history_detail"
     const val TUTORIAL = "tutorial"
+    const val SNI_STANDARD = "sni_standard"
 
 }
 
@@ -56,7 +58,8 @@ fun AppNavHost(
                 onOpenHistoryDetail = { scanId ->
                     navController.navigate("${Routes.HISTORY_DETAIL}/$scanId")
                 },
-                onGoToTutorial = { navController.navigate(Routes.TUTORIAL) }
+                onGoToTutorial = { navController.navigate(Routes.TUTORIAL) },
+                onGoToSni = { navController.navigate(Routes.SNI_STANDARD) }
 
             )
         }
@@ -146,7 +149,9 @@ fun AppNavHost(
                 }
             )
         }
-    
+        composable(Routes.SNI_STANDARD) {
+            SniStandardScreen(onBack = { navController.popBackStack() })
+        }
 
 
     }

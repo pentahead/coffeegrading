@@ -1,34 +1,41 @@
 package id.my.faruq.coffegrader.ui.home
 
-
-import androidx.compose.foundation.Image
+import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.Image
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CenterFocusStrong
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.CenterFocusStrong
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.foundation.border
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.res.painterResource
-import androidx.compose.foundation.Image
-import androidx.compose.ui.layout.ContentScale
 import androidx.hilt.navigation.compose.hiltViewModel
+import coil.compose.AsyncImage
 import id.my.faruq.coffegrader.R
 import id.my.faruq.coffegrader.util.GradeColors
-import coil.compose.AsyncImage
 import java.io.File
 // ===== Model untuk item scan di carousel =====
 data class ScanHistoryItem(
@@ -47,11 +54,13 @@ fun HomeScreen(
     onGoToHistory: () -> Unit,
     onGoToAbout: () -> Unit,
     onGoToTutorial: () -> Unit,
+    onGoToSni: () -> Unit,
     onRefreshHome: () -> Unit,
     onOpenHistoryDetail: (String) -> Unit,
     vm: HomeViewModel = hiltViewModel()
 ) {
     val recentScans by vm.recentScans.collectAsState(initial = emptyList())
+    val contentScroll = rememberScrollState()
 
     Scaffold(
 
@@ -67,6 +76,7 @@ fun HomeScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
+                .verticalScroll(contentScroll)
         ) {
 
             // ===== Header area (background image placeholder) =====
@@ -170,6 +180,11 @@ TutorialScanRow(
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold
             )
+            Spacer(Modifier.height(10.dp))
+            SniInfoCard(
+                onClick = onGoToSni,
+                modifier = Modifier.padding(horizontal = 16.dp)
+            )
 
             Spacer(Modifier.height(80.dp))
         }
@@ -181,6 +196,29 @@ private fun ScanBigButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    // 1. Setup Animasi untuk Gelombang
+    val infiniteTransition = rememberInfiniteTransition(label = "scan_pulse")
+    
+    val scale by infiniteTransition.animateFloat(
+        initialValue = 1f,
+        targetValue = 1.6f, // Seberapa besar gelombang memencar
+        animationSpec = infiniteRepeatable(
+            animation = tween(1500, easing = LinearOutSlowInEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "pulse_scale"
+    )
+
+    val alpha by infiniteTransition.animateFloat(
+        initialValue = 0.5f,
+        targetValue = 0f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1500, easing = LinearOutSlowInEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "pulse_alpha"
+    )
+
     Card(
         modifier = modifier
             .fillMaxWidth()
@@ -191,7 +229,16 @@ private fun ScanBigButton(
             modifier = Modifier.fillMaxSize(),
             contentAlignment = Alignment.Center
         ) {
-            // tombol “SCAN”
+            // 2. Lingkaran Gelombang (Digambar di belakang tombol)
+            Canvas(modifier = Modifier.size(120.dp)) {
+                drawCircle(
+                    color = Color(0xFFB7F23A),
+                    radius = (size.minDimension / 2) * scale,
+                    alpha = alpha
+                )
+            }
+
+            // 3. Tombol "SCAN" Lingkaran Hijau
             Box(
                 modifier = Modifier
                     .size(120.dp)
@@ -200,29 +247,33 @@ private fun ScanBigButton(
                 contentAlignment = Alignment.Center
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("SCAN", fontWeight = FontWeight.Bold)
-                    Text("Sekarang!", style = MaterialTheme.typography.bodySmall)
+                    Text(
+                        text = "SCAN", 
+                        fontWeight = FontWeight.ExtraBold, 
+                        style = MaterialTheme.typography.titleLarge
+                    )
+                    Text(
+                        text = "Sekarang!", 
+                        style = MaterialTheme.typography.labelMedium
+                    )
                 }
             }
 
-            // klik area card seluruhnya
+            // 4. Klik Area (Overlay)
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(Color.Transparent)
-                    .padding(0.dp)
             ) {
-                // invisible clickable overlay
                 TextButton(
                     onClick = onClick,
                     modifier = Modifier.fillMaxSize(),
-                    colors = ButtonDefaults.textButtonColors(contentColor = Color.Transparent)
+                    colors = ButtonDefaults.textButtonColors(containerColor = Color.Transparent)
                 ) { }
             }
         }
     }
 }
-
 
 @Composable
 private fun HistoryCarouselCard(
@@ -387,6 +438,63 @@ private fun TutorialScanRow(
                 modifier = Modifier.size(18.dp)
             )
         }
+    }
+}
+
+@Composable
+private fun SniInfoCard(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        onClick = onClick,
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = Color.White
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Column {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(120.dp)
+                    .background(Color.White)
+            ) {
+                // Sementara pakai drawable lokal. Nanti bisa diganti dengan resource/path gambar SNI yang Anda kirim.
+                Image(
+                    painter = painterResource(R.drawable.bgilustrasi),
+                    contentDescription = "SNI Card",
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(8.dp),
+                    contentScale = ContentScale.Crop
+                )
+            }
+
+            Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "SNI 01-2907-2008 Kopi",
+                    fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
+
+            Icon(
+                imageVector = Icons.Default.CenterFocusStrong,
+                contentDescription = "Go",
+                tint = Color.Gray,
+                modifier = Modifier.size(18.dp)
+            )
+        }
+    }
     }
 }
 

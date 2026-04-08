@@ -26,6 +26,32 @@ fun SampleInputScreen(
 ) {
     val state by vm.uiState.collectAsState()
     val scrollState = rememberScrollState()
+    var submitAttempted by remember { mutableStateOf(false) }
+    var batchTouched by remember { mutableStateOf(false) }
+    var moistureTouched by remember { mutableStateOf(false) }
+    var dirtTouched by remember { mutableStateOf(false) }
+
+    val batchError = when {
+        !(submitAttempted || batchTouched) -> null
+        state.batchId.isBlank() -> "Batch ID wajib diisi"
+        else -> null
+    }
+    val moistureError = when {
+        !(submitAttempted || moistureTouched) -> null
+        state.moisture.isBlank() -> "Kadar air wajib diisi"
+        state.moisture.toFloatOrNull() == null -> "Format angka tidak valid"
+        (state.moisture.toFloatOrNull() ?: 0f) > 12.5f -> "Kadar air maksimal 12.5%"
+        (state.moisture.toFloatOrNull() ?: 0f) < 0f -> "Kadar air tidak boleh negatif"
+        else -> null
+    }
+    val dirtError = when {
+        !(submitAttempted || dirtTouched) -> null
+        state.dirt.isBlank() -> "Kadar kotoran wajib diisi"
+        state.dirt.toFloatOrNull() == null -> "Format angka tidak valid"
+        (state.dirt.toFloatOrNull() ?: 0f) > 0.5f -> "Kadar kotoran maksimal 0.5%"
+        (state.dirt.toFloatOrNull() ?: 0f) < 0f -> "Kadar kotoran tidak boleh negatif"
+        else -> null
+    }
 
     val beanSizeOptions =
         if (state.processingMethod == "Wet")
@@ -82,9 +108,18 @@ fun SampleInputScreen(
 
                     OutlinedTextField(
                         value = state.batchId,
-                        onValueChange = vm::updateBatchId,
+                        onValueChange = {
+                            batchTouched = true
+                            vm.updateBatchId(it)
+                        },
                         label = { Text("Batch ID / Kode Sampel") },
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
+                        isError = batchError != null,
+                        supportingText = {
+                            if (batchError != null) {
+                                Text(batchError)
+                            }
+                        }
                     )
 
                     DropdownField(
@@ -157,22 +192,41 @@ fun SampleInputScreen(
 
                     OutlinedTextField(
                         value = state.moisture,
-                        onValueChange = vm::updateMoisture,
+                        onValueChange = {
+                            moistureTouched = true
+                            vm.updateMoisture(it)
+                        },
                         label = { Text("Kadar Air (%) max 12.5") },
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
+                        isError = moistureError != null,
+                        supportingText = {
+                            if (moistureError != null) {
+                                Text(moistureError)
+                            }
+                        }
                     )
 
                     OutlinedTextField(
                         value = state.dirt,
-                        onValueChange = vm::updateDirt,
+                        onValueChange = {
+                            dirtTouched = true
+                            vm.updateDirt(it)
+                        },
                         label = { Text("Kadar Kotoran (%) max 0.5") },
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
+                        isError = dirtError != null,
+                        supportingText = {
+                            if (dirtError != null) {
+                                Text(dirtError)
+                            }
+                        }
                     )
 
                     Spacer(Modifier.height(8.dp))
 
                     Button(
                         onClick = {
+                            submitAttempted = true
                             vm.saveSample { id ->
                                 onNextToScan(id)
                             }
