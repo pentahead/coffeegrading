@@ -22,6 +22,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
@@ -441,37 +442,89 @@ private fun InfoRow(label: String, value: String) {
 @Composable
 private fun DefectTable(defects: List<DefectRowUi>) {
     val scroll = rememberScrollState()
+    val totalTableWidth = 540.dp
 
     Card(
         shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(containerColor = Color(0xFFF7F7F7))
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(scroll)
-                .padding(12.dp)
-        ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 12.dp)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .width(totalTableWidth)
+                        .horizontalScroll(scroll)
+                ) {
+                    Row(modifier = Modifier.fillMaxWidth()) {
+                        TableCell("No", 40.dp, true)
+                        TableCell("Nama Jenis Cacat", 220.dp, true)
+                        TableCell("Nilai Cacat", 90.dp, true)
+                        TableCell("Jumlah Biji", 90.dp, true)
+                        TableCell("Total Nilai", 100.dp, true)
+                    }
 
-            Row(modifier = Modifier.fillMaxWidth()) {
-                TableCell("No", 40.dp, true)
-                TableCell("Nama Jenis Cacat", 220.dp, true)
-                TableCell("Nilai Cacat", 90.dp, true)
-                TableCell("Jumlah Biji", 90.dp, true)
-                TableCell("Total Nilai", 100.dp, true)
+                    Spacer(Modifier.height(8.dp))
+
+                    defects.forEach { d ->
+                        Row(modifier = Modifier.fillMaxWidth()) {
+                            TableCell(d.no.toString(), 40.dp)
+                            TableCell(d.defectName, 220.dp)
+                            TableCell(d.defectScore.toString(), 90.dp)
+                            TableCell(d.count.toString(), 90.dp)
+                            TableCell(d.totalScore.toString(), 100.dp)
+                        }
+                        Spacer(Modifier.height(6.dp))
+                    }
+                }
+
+                // Fade kanan saat masih ada kolom tersembunyi di sisi kanan.
+                if (scroll.maxValue > 0 && scroll.value < scroll.maxValue) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.CenterEnd)
+                            .fillMaxHeight()
+                            .width(26.dp)
+                            .background(
+                                brush = Brush.horizontalGradient(
+                                    colors = listOf(
+                                        Color.Transparent,
+                                        Color(0xFFF7F7F7)
+                                    )
+                                )
+                            )
+                    )
+                }
             }
 
-            Spacer(Modifier.height(8.dp))
+            // Scrollbar horizontal (custom) di bawah tabel.
+            if (scroll.maxValue > 0) {
+                val progress =
+                    if (scroll.maxValue == 0) 0f else scroll.value.toFloat() / scroll.maxValue.toFloat()
+                val thumbWidthFraction = 0.28f
 
-            defects.forEach { d ->
-                Row(modifier = Modifier.fillMaxWidth()) {
-                    TableCell(d.no.toString(), 40.dp)
-                    TableCell(d.defectName, 220.dp)
-                    TableCell(d.defectScore.toString(), 90.dp)
-                    TableCell(d.count.toString(), 90.dp)
-                    TableCell(d.totalScore.toString(), 100.dp)
+                BoxWithConstraints(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 8.dp)
+                        .height(6.dp)
+                        .clip(RoundedCornerShape(99.dp))
+                        .background(Color.Black.copy(alpha = 0.12f))
+                ) {
+                    val maxThumbOffset = maxWidth * (1f - thumbWidthFraction)
+                    val thumbOffset = maxThumbOffset * progress
+                    Box(
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .fillMaxWidth(thumbWidthFraction)
+                            .offset(x = thumbOffset)
+                            .clip(RoundedCornerShape(99.dp))
+                            .background(Color.Black.copy(alpha = 0.32f))
+                    )
                 }
-                Spacer(Modifier.height(6.dp))
             }
         }
     }

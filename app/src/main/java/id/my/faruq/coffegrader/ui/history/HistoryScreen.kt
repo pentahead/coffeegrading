@@ -204,6 +204,7 @@ fun HistoryScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp, vertical = 8.dp),
+                    shape = RoundedCornerShape(12.dp),
                     singleLine = true
                 )
             }

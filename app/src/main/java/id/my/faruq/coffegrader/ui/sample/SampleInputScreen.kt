@@ -45,6 +45,7 @@ fun SampleInputScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
+                .imePadding()
                 .verticalScroll(scrollState)
                 .padding(horizontal = 16.dp, vertical = 12.dp)
         ) {

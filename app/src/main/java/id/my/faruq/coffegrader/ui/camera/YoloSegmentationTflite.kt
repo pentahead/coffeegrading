@@ -50,7 +50,7 @@ data class YoloSegmentationResult(
  */
 class YoloSegmentationTflite(
     context: Context,
-    private val modelResId: Int = R.raw.best_float32,
+    private val modelResId: Int = R.raw.best_v2_float32,
     private val labels: List<String> = emptyList(),
     private val logTag: String = "YoloSegmentationTflite",
 ) : AutoCloseable {
@@ -240,6 +240,25 @@ class YoloSegmentationTflite(
             val b = (base * 2) % 255
             return Color.argb(maskAlpha, r, g, b)
         }
+        fun labelForClass(idx: Int): String {
+            return labels.getOrNull(idx) ?: "class_$idx"
+        }
+
+        val boxPaint = Paint().apply {
+            style = Paint.Style.STROKE
+            strokeWidth = 3f
+            isAntiAlias = true
+        }
+        val textBgPaint = Paint().apply {
+            style = Paint.Style.FILL
+            isAntiAlias = true
+        }
+        val textPaint = Paint().apply {
+            color = Color.WHITE
+            textSize = 28f
+            isAntiAlias = true
+        }
+        val textPad = 8f
 
         val ratioSafe = if (ratio <= 0f) 1f else ratio
 
@@ -281,6 +300,32 @@ class YoloSegmentationTflite(
 
             val maskScaled = Bitmap.createScaledBitmap(maskCrop, wOrig, hOrig, false)
             canvas.drawBitmap(maskScaled, leftOrig.toFloat(), topOrig.toFloat(), null)
+
+            // Draw bbox + label di koordinat gambar asli agar kelas cacat terlihat jelas.
+            val rightOrig = (leftOrig + wOrig).coerceAtMost(bitmap.width - 1)
+            val bottomOrig = (topOrig + hOrig).coerceAtMost(bitmap.height - 1)
+            val classColor = colorForClass(det.classIndex)
+            boxPaint.color = classColor
+            textBgPaint.color = Color.argb(220, Color.red(classColor), Color.green(classColor), Color.blue(classColor))
+
+            val label = "${labelForClass(det.classIndex)} ${(det.score * 100f).roundToInt()}%"
+            val textW = textPaint.measureText(label)
+            val textH = textPaint.fontMetrics.run { bottom - top }
+            val labelLeft = leftOrig.toFloat().coerceAtLeast(0f)
+            val labelTop = (topOrig.toFloat() - textH - (textPad * 2f)).coerceAtLeast(0f)
+            val labelRight = (labelLeft + textW + textPad * 2f).coerceAtMost(bitmap.width.toFloat())
+            val labelBottom = (labelTop + textH + textPad * 2f).coerceAtMost(bitmap.height.toFloat())
+
+            canvas.drawRect(
+                leftOrig.toFloat(),
+                topOrig.toFloat(),
+                rightOrig.toFloat(),
+                bottomOrig.toFloat(),
+                boxPaint
+            )
+            canvas.drawRect(labelLeft, labelTop, labelRight, labelBottom, textBgPaint)
+            val textBaseline = labelBottom - textPad - textPaint.fontMetrics.bottom
+            canvas.drawText(label, labelLeft + textPad, textBaseline, textPaint)
         }
 
         return YoloSegmentationResult(overlay = overlay, detections = detectionsMeta)
