@@ -1,19 +1,14 @@
 plugins {
-//    alias(libs.plugins.android.application)
+    alias(libs.plugins.android.application)
+    alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
-    id("com.android.application")
-    id("org.jetbrains.kotlin.android")
-    id("com.google.devtools.ksp") version "2.0.21-1.0.27" // untuk Room (KSP)
-    id("org.jetbrains.kotlin.kapt")
-    id("com.google.dagger.hilt.android")
-
+    alias(libs.plugins.google.devtools.ksp)
+    alias(libs.plugins.kotlin.kapt)
+    alias(libs.plugins.hilt.android)
 }
 
 android {
     namespace = "id.my.faruq.coffegrader"
-//    compileSdk {
-//        version = release(34)
-//    }
     compileSdk = 34
 
     defaultConfig {
@@ -49,59 +44,53 @@ android {
     kotlin {
         jvmToolchain(17)
     }
+
+    // File .tflite tidak boleh dikompres (MappedByteBuffer / TFLite)
+    androidResources {
+        noCompress += "tflite"
+    }
 }
 
 dependencies {
-    // Compose BOM
     val composeBom = platform("androidx.compose:compose-bom:2024.10.00")
     implementation(composeBom)
     androidTestImplementation(composeBom)
-// Compose UI
+
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.ui:ui-tooling-preview")
     debugImplementation("androidx.compose.ui:ui-tooling")
 
-    // Icons (supaya Icons.Default.List/Info/ArrowBack tidak error)
     implementation("androidx.compose.material:material-icons-extended")
 
-    // Activity Compose
     implementation("androidx.activity:activity-compose:1.9.2")
 
-    // Navigation Compose
     implementation("androidx.navigation:navigation-compose:2.8.3")
 
-    // ViewModel Compose
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.6")
 
-    // CameraX (nanti dipakai Step CameraX)
     val cameraxVersion = "1.4.0"
     implementation("androidx.camera:camera-core:$cameraxVersion")
     implementation("androidx.camera:camera-camera2:$cameraxVersion")
     implementation("androidx.camera:camera-lifecycle:$cameraxVersion")
     implementation("androidx.camera:camera-view:$cameraxVersion")
 
-    // TFLite (nanti dipakai Step TFLite)
-    implementation("org.tensorflow:tensorflow-lite:2.14.0")
-
-    // Room (nanti dipakai Step Room)
     val roomVersion = "2.6.1"
     implementation("androidx.room:room-runtime:$roomVersion")
     implementation("androidx.room:room-ktx:$roomVersion")
     ksp("androidx.room:room-compiler:$roomVersion")
 
-    // Hilt Core
     implementation("com.google.dagger:hilt-android:2.51.1")
     kapt("com.google.dagger:hilt-compiler:2.51.1")
 
-
-
-
-    // Hilt Navigation Compose
     implementation("androidx.hilt:hilt-navigation-compose:1.2.0")
 
     implementation("androidx.compose.animation:animation")
     implementation("io.coil-kt:coil-compose:2.6.0")
+
+    implementation("org.tensorflow:tensorflow-lite:2.16.1")
+    implementation("org.tensorflow:tensorflow-lite-support:0.4.4")
+
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)
@@ -118,6 +107,7 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
 }
+
 kapt {
     correctErrorTypes = true
 }

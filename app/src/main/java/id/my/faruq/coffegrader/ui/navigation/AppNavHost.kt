@@ -8,6 +8,7 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.*
 import id.my.faruq.coffegrader.ui.about.AboutScreen
 import id.my.faruq.coffegrader.ui.camera.CameraScreen
+import id.my.faruq.coffegrader.ui.camera.CameraViewModel
 import id.my.faruq.coffegrader.ui.history.HistoryScreen
 import id.my.faruq.coffegrader.ui.history.HistoryDetailScreen
 import id.my.faruq.coffegrader.ui.history.HistoryDetailViewModel
@@ -78,10 +79,12 @@ fun AppNavHost(
 
         // ================= CAMERA (dengan sampleInfoId dari input sampel) =================
         composable(route = Routes.CAMERA_WITH_SAMPLE) { backStackEntry ->
+            val cameraVm: CameraViewModel = hiltViewModel(backStackEntry)
             val sampleInfoIdStr = backStackEntry.arguments?.getString("sampleInfoId") ?: "0"
             val sampleInfoId = sampleInfoIdStr.toLongOrNull() ?: 0L
             CameraScreen(
                 sampleInfoId = if (sampleInfoId > 0) sampleInfoId else null,
+                inferenceEngine = cameraVm.inferenceEngine,
                 onNavigateToHome = {
                     navController.navigate(Routes.HOME) {
                         popUpTo(Routes.HOME) { inclusive = true }
