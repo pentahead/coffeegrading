@@ -3,9 +3,9 @@ package id.my.faruq.coffegrader.ml
 import android.content.Context
 import android.graphics.Bitmap
 import android.util.Log
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import dagger.hilt.android.qualifiers.ApplicationContext
 import org.tensorflow.lite.Interpreter
 import java.io.FileInputStream
 import java.nio.ByteBuffer
@@ -15,153 +15,156 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Lazy singleton TFLite inference engine untuk model YOLO11n-seg.
+ * Menyimpan parameter letterbox agar koordinat bbox bisa di-unpad
+ * dengan tepat saat drawing ke bitmap asli.
  *
- * - Interpreter dibuat sekali (lazy) dan di-serialize via Mutex agar thread-safe.
- * - Preprocess: resize → [1,640,640,3] FLOAT32 (÷255f) tanpa stretch
- *   (letterbox dengan padding hitam jika rasio gambar tidak 1:1).
- * - Output 0: [1,57,8400] untuk deteksi.
- * - Output 1: [1,160,160,32] proto mask (dialokasikan tapi tidak dipakai grading).
+ * @param scale   skala resize (min(640/w, 640/h))
+ * @param padX    padding horizontal dalam piksel input-space (kiri & kanan)
+ * @param padY    padding vertikal dalam piksel input-space (atas & bawah)
  */
+data class LetterboxParams(val scale: Float, val padX: Int, val padY: Int)
+
 @Singleton
 class CoffeeInferenceEngine @Inject constructor(
     @ApplicationContext private val context: Context,
 ) {
-    private val TAG = "CoffeeInferenceEngine"
+    private val TAG   = "CoffeeInferenceEngine"
     private val mutex = Mutex()
-
     private var interpreter: Interpreter? = null
 
-    // -------------------------------------------------------------------------
-    // Inisialisasi interpreter (lazy, dipanggil pertama kali saat inferensi)
-    // -------------------------------------------------------------------------
-
     private fun loadInterpreter(): Interpreter {
-        val options = Interpreter.Options().apply {
-            numThreads = 4
-        }
-        val assetFd = context.assets.openFd(ModelConfig.MODEL_FILE_NAME)
-        val inputStream = FileInputStream(assetFd.fileDescriptor)
-        val fileChannel = inputStream.channel
-        val mappedBuffer = fileChannel.map(
-            FileChannel.MapMode.READ_ONLY,
-            assetFd.startOffset,
-            assetFd.declaredLength,
+        val opts = Interpreter.Options().apply { numThreads = 4 }
+        val fd   = context.assets.openFd(ModelConfig.MODEL_FILE_NAME)
+        val buf  = FileInputStream(fd.fileDescriptor).channel.map(
+            FileChannel.MapMode.READ_ONLY, fd.startOffset, fd.declaredLength
         )
-        fileChannel.close()
-        inputStream.close()
-        return Interpreter(mappedBuffer, options)
-    }
-
-    private fun getOrCreateInterpreter(): Interpreter {
-        if (interpreter == null) {
-            interpreter = loadInterpreter()
+        return Interpreter(buf, opts).also {
             Log.d(TAG, "Interpreter loaded: ${ModelConfig.MODEL_FILE_NAME}")
         }
-        return interpreter!!
     }
 
-    // -------------------------------------------------------------------------
-    // Public API
-    // -------------------------------------------------------------------------
+    private fun getOrCreate(): Interpreter =
+        interpreter ?: loadInterpreter().also { interpreter = it }
 
     /**
-     * Jalankan inferensi di coroutine yang memanggil fungsi ini
-     * (caller WAJIB pakai Dispatchers.Default atau IO — lihat CameraScreen).
-     *
-     * @return Result<List<DetectionDto>> — failure jika model gagal load / OOM.
+     * Jalankan inferensi.
+     * @return InferenceOutput berisi deteksi (koordinat sudah di-unpad ke bitmap asli)
+     *         + proto flat untuk segmentasi.
      */
-    suspend fun runInference(bitmap: Bitmap): Result<List<DetectionDto>> = mutex.withLock {
+    suspend fun runInference(bitmap: Bitmap): Result<InferenceOutput> = mutex.withLock {
         return try {
-            val interp = getOrCreateInterpreter()
+            val interp = getOrCreate()
 
-            // --- Preprocess: letterbox → ByteBuffer FLOAT32 ---
-            val inputBuffer = preprocessBitmap(bitmap)
+            // Preprocess + simpan params letterbox
+            val (input, lbParams) = preprocessBitmap(bitmap)
 
-            // --- Alokasi output ---
-            // Output 0: [1, 57, 8400]
-            val out0 = Array(1) { Array(ModelConfig.BBOX_DIMS + CoffeeLabelTaxonomy.NUM_CLASSES + ModelConfig.MASK_COEFF_DIM) {
-                FloatArray(ModelConfig.NUM_PREDICTIONS)
+            val numCh = ModelConfig.BBOX_DIMS + CoffeeLabelTaxonomy.NUM_CLASSES + ModelConfig.MASK_COEFF_DIM
+            val out0  = Array(1) { Array(numCh) { FloatArray(ModelConfig.NUM_PREDICTIONS) } }
+            val out1  = Array(1) { Array(ModelConfig.PROTO_SIZE) {
+                Array(ModelConfig.PROTO_SIZE) { FloatArray(ModelConfig.MASK_COEFF_DIM) }
             }}
-            // Output 1: [1, 160, 160, 32] — proto masks
-            val out1 = Array(1) { Array(ModelConfig.PROTO_SIZE) { Array(ModelConfig.PROTO_SIZE) {
-                FloatArray(ModelConfig.MASK_COEFF_DIM)
-            }}}
 
-            val outputs = mapOf(0 to out0, 1 to out1)
+            interp.runForMultipleInputsOutputs(arrayOf(input), mapOf(0 to out0, 1 to out1))
 
-            interp.runForMultipleInputsOutputs(arrayOf(inputBuffer), outputs)
+            // Ratakan out0
+            val flat0 = FloatArray(numCh * ModelConfig.NUM_PREDICTIONS)
+            for (c in 0 until numCh)
+                for (p in 0 until ModelConfig.NUM_PREDICTIONS)
+                    flat0[c * ModelConfig.NUM_PREDICTIONS + p] = out0[0][c][p]
 
-            // --- Ratakan out0 untuk Decoder ---
-            val numChannels = ModelConfig.BBOX_DIMS + CoffeeLabelTaxonomy.NUM_CLASSES + ModelConfig.MASK_COEFF_DIM
-            val flat = FloatArray(numChannels * ModelConfig.NUM_PREDICTIONS)
-            for (c in 0 until numChannels) {
-                for (p in 0 until ModelConfig.NUM_PREDICTIONS) {
-                    flat[c * ModelConfig.NUM_PREDICTIONS + p] = out0[0][c][p]
-                }
+            // Decode — koordinat masih dalam input-space (0..640 termasuk padding)
+            val rawDetections = Yolo11SegDecoder.decode(flat0)
+
+            // Unpad + rescale koordinat ke bitmap asli
+            val detections = rawDetections.map { det ->
+                unpadDetection(det, bitmap, lbParams)
             }
 
-            val detections = Yolo11SegDecoder.decode(flat)
-            Result.success(detections)
+            // Ratakan out1 → [160*160*32]
+            val ps    = ModelConfig.PROTO_SIZE
+            val md    = ModelConfig.MASK_COEFF_DIM
+            val flat1 = FloatArray(ps * ps * md)
+            for (h in 0 until ps)
+                for (w in 0 until ps)
+                    for (c in 0 until md)
+                        flat1[(h * ps + w) * md + c] = out1[0][h][w][c]
+
+            Result.success(InferenceOutput(detections = detections, protoFlat = flat1,
+                letterbox = lbParams, srcWidth = bitmap.width, srcHeight = bitmap.height))
 
         } catch (oom: OutOfMemoryError) {
-            Log.e(TAG, "OOM saat inferensi — coba kurangi resolusi input", oom)
-            interpreter?.close(); interpreter = null
+            Log.e(TAG, "OOM", oom); interpreter?.close(); interpreter = null
             Result.failure(oom)
         } catch (e: Exception) {
-            Log.e(TAG, "Inferensi gagal", e)
-            Result.failure(e)
+            Log.e(TAG, "Inferensi gagal", e); Result.failure(e)
         }
     }
 
-    /** Tutup interpreter jika tidak dibutuhkan lagi (mis. saat Application destroy). */
-    fun close() {
-        interpreter?.close()
-        interpreter = null
-    }
+    fun close() { interpreter?.close(); interpreter = null }
 
-    // -------------------------------------------------------------------------
-    // Preprocess: letterbox + normalize
-    // -------------------------------------------------------------------------
+    // ── Letterbox preprocess ──────────────────────────────────────────────────
 
     /**
-     * Letterbox resize: pertahankan rasio aspek, padding hitam di sisi pendek.
-     * Output ByteBuffer: FLOAT32, shape [1, INPUT_SIZE, INPUT_SIZE, 3], pixel/255f.
+     * Resize dengan letterbox (aspect-ratio preserved, padding hitam).
+     * Return ByteBuffer FLOAT32 + LetterboxParams untuk unpad nanti.
      */
-    private fun preprocessBitmap(src: Bitmap): ByteBuffer {
-        val size = ModelConfig.INPUT_SIZE
-
-        // Hitung skala letterbox
+    private fun preprocessBitmap(src: Bitmap): Pair<ByteBuffer, LetterboxParams> {
+        val size  = ModelConfig.INPUT_SIZE  // 640
         val scale = minOf(size.toFloat() / src.width, size.toFloat() / src.height)
-        val newW = (src.width * scale).toInt()
-        val newH = (src.height * scale).toInt()
-        val padX = (size - newW) / 2
-        val padY = (size - newH) / 2
+        val newW  = (src.width  * scale).toInt()
+        val newH  = (src.height * scale).toInt()
+        // Padding: bagi dua sisi agar gambar di tengah
+        val padX  = (size - newW) / 2
+        val padY  = (size - newH) / 2
 
-        // Canvas hitam 640×640
-        val letterboxed = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
-        val canvas = android.graphics.Canvas(letterboxed)
+        val lb     = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+        val canvas = android.graphics.Canvas(lb)
         canvas.drawColor(android.graphics.Color.BLACK)
-
         val scaled = Bitmap.createScaledBitmap(src, newW, newH, true)
         canvas.drawBitmap(scaled, padX.toFloat(), padY.toFloat(), null)
         if (scaled != src) scaled.recycle()
 
-        // Tulis ke ByteBuffer FLOAT32
-        val buf = ByteBuffer.allocateDirect(1 * size * size * 3 * 4)
-            .order(ByteOrder.nativeOrder())
-        buf.rewind()
-
+        val buf    = ByteBuffer.allocateDirect(size * size * 3 * 4).order(ByteOrder.nativeOrder())
         val pixels = IntArray(size * size)
-        letterboxed.getPixels(pixels, 0, size, 0, 0, size, size)
-        letterboxed.recycle()
+        lb.getPixels(pixels, 0, size, 0, 0, size, size)
+        lb.recycle()
 
         for (px in pixels) {
-            buf.putFloat(((px shr 16) and 0xFF) / ModelConfig.PIXEL_NORM) // R
-            buf.putFloat(((px shr 8)  and 0xFF) / ModelConfig.PIXEL_NORM) // G
-            buf.putFloat((px          and 0xFF) / ModelConfig.PIXEL_NORM) // B
+            buf.putFloat(((px shr 16) and 0xFF) / ModelConfig.PIXEL_NORM)
+            buf.putFloat(((px shr  8) and 0xFF) / ModelConfig.PIXEL_NORM)
+            buf.putFloat((px          and 0xFF) / ModelConfig.PIXEL_NORM)
         }
         buf.rewind()
-        return buf
+
+        return Pair(buf, LetterboxParams(scale = scale, padX = padX, padY = padY))
+    }
+
+    // ── Unpad koordinat dari input-space → bitmap asli ────────────────────────
+
+    /**
+     * Konversi koordinat DetectionDto dari input-space (0..640, termasuk padding)
+     * ke koordinat bitmap asli (0..src.width / 0..src.height).
+     *
+     * Rumus:
+     *   xOrig = (xInput - padX) / scale
+     *   yOrig = (yInput - padY) / scale
+     */
+    private fun unpadDetection(det: id.my.faruq.coffegrader.ml.DetectionDto,
+                                src: Bitmap, lb: LetterboxParams
+    ): id.my.faruq.coffegrader.ml.DetectionDto {
+        fun unX(v: Float) = ((v - lb.padX) / lb.scale).coerceIn(0f, src.width.toFloat())
+        fun unY(v: Float) = ((v - lb.padY) / lb.scale).coerceIn(0f, src.height.toFloat())
+
+        val x1 = unX(det.cx - det.w / 2f)
+        val y1 = unY(det.cy - det.h / 2f)
+        val x2 = unX(det.cx + det.w / 2f)
+        val y2 = unY(det.cy + det.h / 2f)
+
+        return det.copy(
+            cx = (x1 + x2) / 2f,
+            cy = (y1 + y2) / 2f,
+            w  = (x2 - x1).coerceAtLeast(1f),
+            h  = (y2 - y1).coerceAtLeast(1f),
+        )
     }
 }

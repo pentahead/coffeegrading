@@ -1,372 +1,357 @@
 package id.my.faruq.coffegrader.ui.camera
 
 import android.Manifest
+import android.content.Context
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Matrix
+import android.graphics.Color as AndroidColor
+import android.media.ExifInterface
+import android.net.Uri
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.core.CameraSelector
+import androidx.camera.core.ImageCapture
+import androidx.camera.core.ImageCaptureException
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalLifecycleOwner
-import androidx.compose.ui.viewinterop.AndroidView
-import androidx.core.content.ContextCompat
-
-import android.widget.Toast
-import androidx.camera.core.ImageCapture
-import androidx.camera.core.ImageCaptureException
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Camera
-import androidx.compose.material.icons.filled.PhotoLibrary
-import android.net.Uri
-import java.io.File
-import java.text.SimpleDateFormat
-import java.util.*
-import android.content.Context
-import android.graphics.Bitmap
-import android.graphics.BitmapFactory
-import android.graphics.Matrix
-import android.media.ExifInterface
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.filled.FlashOff
-import androidx.compose.material.icons.filled.FlashOn
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
+import id.my.faruq.coffegrader.ml.AggregatedDefects
 import id.my.faruq.coffegrader.ml.CoffeeInferenceEngine
 import id.my.faruq.coffegrader.ml.DefectAggregator
 import id.my.faruq.coffegrader.ml.GradePolicy
+import id.my.faruq.coffegrader.ml.InferenceOutput
+import id.my.faruq.coffegrader.ml.ModelConfig
+import id.my.faruq.coffegrader.ml.SegmentationDecoder
 import id.my.faruq.coffegrader.ui.scan.ScanViewModel
 import id.my.faruq.coffegrader.util.BitmapUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
 import java.io.FileOutputStream
+import java.text.SimpleDateFormat
+import java.util.*
+
+val BOX_COLORS_ARGB = listOf(
+    AndroidColor.rgb(255, 80,  80),
+    AndroidColor.rgb(80,  200, 80),
+    AndroidColor.rgb(80,  160, 255),
+    AndroidColor.rgb(255, 200, 0),
+    AndroidColor.rgb(200, 80,  255),
+)
+
+private data class ScanResult(
+    val overlayBitmap : Bitmap,
+    val aggregated    : AggregatedDefects,
+    val gradeText     : String,
+    val durationMs    : Long,
+    val imagePath     : String?,
+    val thumbnailPath : String?,
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CameraScreen(
-    sampleInfoId: Long? = null,
-    onNavigateToHome: () -> Unit,
+    sampleInfoId       : Long? = null,
+    onNavigateToHome   : () -> Unit,
     onSaveAndShowDetail: (Long) -> Unit = {},
-    // Engine di-inject sebagai parameter agar testable; di produksi diambil via hiltViewModel/entryPoint
-    inferenceEngine: CoffeeInferenceEngine,
+    inferenceEngine    : CoffeeInferenceEngine,
 ) {
-    val context = LocalContext.current
+    val context        = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val cameraVm: CameraViewModel = hiltViewModel()
-    val scanVm: ScanViewModel = hiltViewModel()
-    val batchName by cameraVm.batchName.collectAsState()
+    val scanVm  : ScanViewModel   = hiltViewModel()
+    val batchName  by cameraVm.batchName.collectAsState()
     val coffeeType by cameraVm.coffeeType.collectAsState()
     val scope = rememberCoroutineScope()
 
-    var showGuideDialog by remember(sampleInfoId) { mutableStateOf(sampleInfoId != null) }
-
-    var hasCameraPermission by remember {
-        mutableStateOf(
-            ContextCompat.checkSelfPermission(
-                context,
-                Manifest.permission.CAMERA
-            ) == PackageManager.PERMISSION_GRANTED
-        )
+    var showGuide    by remember(sampleInfoId) { mutableStateOf(sampleInfoId != null) }
+    var hasPermission by remember {
+        mutableStateOf(ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA)
+                == PackageManager.PERMISSION_GRANTED)
     }
-
     var isFlashOn by remember { mutableStateOf(false) }
-    var camera by remember { mutableStateOf<androidx.camera.core.Camera?>(null) }
+    var camera    by remember { mutableStateOf<androidx.camera.core.Camera?>(null) }
     val hasFlash = camera?.cameraInfo?.hasFlashUnit() == true
 
-    // [BARU] State inferensi — tidak mengubah UI yang ada, hanya loading indicator
-    var isInferring by remember { mutableStateOf(false) }
+    var capturedBitmap by remember { mutableStateOf<Bitmap?>(null) }
+    var isInferring    by remember { mutableStateOf(false) }
+    var scanResult     by remember { mutableStateOf<ScanResult?>(null) }
+    var isSaving       by remember { mutableStateOf(false) }
 
-    val permissionLauncher =
-        rememberLauncherForActivityResult(
-            contract = ActivityResultContracts.RequestPermission()
-        ) { granted ->
-            hasCameraPermission = granted
-        }
+    val permLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted -> hasPermission = granted }
 
-    LaunchedEffect(Unit) {
-        if (!hasCameraPermission) {
-            permissionLauncher.launch(Manifest.permission.CAMERA)
-        }
-    }
+    LaunchedEffect(Unit) { if (!hasPermission) permLauncher.launch(Manifest.permission.CAMERA) }
 
     val imageCapture = remember {
-        ImageCapture.Builder()
-            .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
-            .build()
+        ImageCapture.Builder().setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY).build()
     }
 
-    var capturedBitmap by remember { mutableStateOf<Bitmap?>(null) }
+    fun reset() { capturedBitmap = null; scanResult = null; isInferring = false; isSaving = false }
 
-    val pickImageFromGallery = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.PickVisualMedia(),
+    fun runInference(bmp: Bitmap) {
+        scope.launch {
+            isInferring = true
+            try {
+                val startMs = System.currentTimeMillis()
+                val result  = withContext(Dispatchers.Default) { inferenceEngine.runInference(bmp) }
+                val dur     = System.currentTimeMillis() - startMs
+
+                result
+                    .onSuccess { output: InferenceOutput ->
+                        val maskCoeffs = output.detections
+                            .flatMap { it.maskCoeffs?.toList() ?: List(ModelConfig.MASK_COEFF_DIM) { 0f } }
+                            .toFloatArray()
+
+                        // Gambar overlay bbox + segmentasi
+                        val overlay = withContext(Dispatchers.Default) {
+                            SegmentationDecoder.drawWithMasks(
+                                src         = bmp,
+                                detections  = output.detections,
+                                maskCoeffs  = maskCoeffs,
+                                protoOutput = output.protoFlat,
+                                letterbox   = output.letterbox,
+                                boxColors   = BOX_COLORS_ARGB,
+                            )
+                        }
+
+                        // Simpan gambar OVERLAY (bbox + segmentasi) ke disk
+                        val (imgPath, thumbPath) = withContext(Dispatchers.IO) {
+                            saveBitmapAndThumbnail(context, overlay)
+                        }
+
+                        val agg   = DefectAggregator.aggregate(output.detections)
+                        val grade = GradePolicy.gradeFromScore(agg.totalScore, coffeeType)
+                        scanResult = ScanResult(
+                            overlayBitmap = overlay,
+                            aggregated    = agg,
+                            gradeText     = grade,
+                            durationMs    = dur,
+                            imagePath     = imgPath,
+                            thumbnailPath = thumbPath,
+                        )
+                    }
+                    .onFailure { err ->
+                        android.util.Log.e("CameraScreen", "Inferensi gagal", err)
+                        Toast.makeText(context, "Gagal: ${err.message}", Toast.LENGTH_SHORT).show()
+                    }
+            } finally { isInferring = false }
+        }
+    }
+
+    val galleryLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.PickVisualMedia()
     ) { uri: Uri? ->
         if (uri == null) return@rememberLauncherForActivityResult
         scope.launch {
-            val bitmap = withContext(Dispatchers.IO) {
-                loadBitmapFromUri(context, uri)
-            }
-            if (bitmap == null) {
-                Toast.makeText(context, "Gagal memuat gambar dari galeri", Toast.LENGTH_SHORT).show()
+            val bmp = withContext(Dispatchers.IO) { loadBitmapFromUri(context, uri) } ?: run {
+                Toast.makeText(context, "Gagal memuat gambar", Toast.LENGTH_SHORT).show()
                 return@launch
             }
-            capturedBitmap = bitmap
+            reset(); capturedBitmap = bmp; runInference(bmp)
         }
     }
 
-    fun toggleFlash() {
-        camera?.cameraControl?.enableTorch(!isFlashOn)
-        isFlashOn = !isFlashOn
-    }
-
-    Scaffold { padding ->
-        if (showGuideDialog) {
+    Scaffold { _ ->
+        if (showGuide) {
             AlertDialog(
-                onDismissRequest = { showGuideDialog = false },
-                title = { Text("Panduan Scan Biji") },
-                text = {
-                    Text(
-                        "Biji kopi harus dipaparkan (tidak boleh bertumpuk) dan berjumlah 300 gram agar hasil scan akurat."
-                    )
-                },
-                confirmButton = {
-                    Button(onClick = { showGuideDialog = false }) { Text("Oke") }
-                }
+                onDismissRequest = { showGuide = false },
+                title   = { Text("Panduan Scan Biji") },
+                text    = { Text("Biji kopi harus dipaparkan (tidak boleh bertumpuk) dan berjumlah 300 gram agar hasil scan akurat.") },
+                confirmButton = { Button(onClick = { showGuide = false }) { Text("Oke") } }
             )
         }
 
+        // ── Kamera ────────────────────────────────────────────────────────
         Box(modifier = Modifier.fillMaxSize()) {
-            if (hasCameraPermission) {
-
-                // 1) Kamera (background) — tidak diubah
+            if (hasPermission) {
                 AndroidView(
                     modifier = Modifier.fillMaxSize(),
-                    factory = { ctx ->
-                        val previewView = PreviewView(ctx)
-
-                        val cameraProviderFuture = ProcessCameraProvider.getInstance(ctx)
-                        cameraProviderFuture.addListener({
-                            val cameraProvider = cameraProviderFuture.get()
-                            val preview = Preview.Builder().build().also {
-                                it.setSurfaceProvider(previewView.surfaceProvider)
-                            }
-                            val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
-                            try {
-                                cameraProvider.unbindAll()
-                                camera = cameraProvider.bindToLifecycle(
-                                    lifecycleOwner, cameraSelector, preview, imageCapture
-                                )
-                            } catch (exc: Exception) {
-                                android.util.Log.e("CameraScreen", "CameraX bind failed", exc)
-                            }
-                        }, ContextCompat.getMainExecutor(ctx))
-
-                        previewView
+                    factory  = { ctx ->
+                        PreviewView(ctx).also { pv ->
+                            ProcessCameraProvider.getInstance(ctx).addListener({
+                                val prov = ProcessCameraProvider.getInstance(ctx).get()
+                                val prev = Preview.Builder().build()
+                                    .also { it.setSurfaceProvider(pv.surfaceProvider) }
+                                try {
+                                    prov.unbindAll()
+                                    camera = prov.bindToLifecycle(
+                                        lifecycleOwner, CameraSelector.DEFAULT_BACK_CAMERA,
+                                        prev, imageCapture
+                                    )
+                                } catch (e: Exception) {
+                                    android.util.Log.e("CameraScreen", "bind failed", e)
+                                }
+                            }, ContextCompat.getMainExecutor(ctx))
+                        }
                     }
                 )
+            }
 
-                // 2) Grid overlay — tidak diubah (diasumsikan kode grid ada di sini)
-
-                // 3) Row tombol bawah kamera — tidak diubah
+            if (capturedBitmap == null && hasPermission) {
                 Row(
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .padding(bottom = 32.dp),
+                    modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 32.dp),
                     horizontalArrangement = Arrangement.spacedBy(24.dp),
-                    verticalAlignment = Alignment.CenterVertically,
+                    verticalAlignment     = Alignment.CenterVertically,
                 ) {
-                    IconButton(
-                        onClick = {
-                            pickImageFromGallery.launch(
-                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                            )
-                        }
-                    ) {
-                        Icon(Icons.Default.PhotoLibrary, contentDescription = "Galeri")
-                    }
+                    IconButton(onClick = {
+                        galleryLauncher.launch(
+                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                        )
+                    }) { Icon(Icons.Default.PhotoLibrary, null, tint = Color.White) }
 
                     IconButton(
-                        onClick = {
+                        onClick  = {
                             capturePhotoToBitmap(context, imageCapture) { bmp ->
-                                capturedBitmap = bmp
+                                reset(); capturedBitmap = bmp; runInference(bmp)
                             }
                         },
-                        modifier = Modifier
-                            .size(64.dp)
-                            .background(Color(0xFF7CFF00), shape = CircleShape)
-                    ) {
-                        Icon(Icons.Default.Camera, contentDescription = "Capture")
-                    }
+                        modifier = Modifier.size(64.dp).background(Color(0xFF7CFF00), CircleShape)
+                    ) { Icon(Icons.Default.Camera, null) }
 
                     if (hasFlash) {
-                        IconButton(onClick = { toggleFlash() }) {
-                            Icon(
-                                imageVector = if (isFlashOn) Icons.Filled.FlashOn else Icons.Filled.FlashOff,
-                                contentDescription = "Flash"
-                            )
+                        IconButton(onClick = {
+                            camera?.cameraControl?.enableTorch(!isFlashOn); isFlashOn = !isFlashOn
+                        }) {
+                            Icon(if (isFlashOn) Icons.Filled.FlashOn else Icons.Filled.FlashOff,
+                                null, tint = Color.White)
                         }
-                    } else {
-                        Spacer(modifier = Modifier.size(48.dp))
-                    }
+                    } else Spacer(Modifier.size(48.dp))
                 }
             }
         }
 
-        // Overlay preview Bitmap + Simpan & Lihat Hasil — struktur UI tidak diubah
+        // ── Preview + overlay ─────────────────────────────────────────────
         capturedBitmap?.let { bmp ->
+            val displayBmp = scanResult?.overlayBitmap ?: bmp
+
             Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.6f))
+                modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.88f))
             ) {
                 Image(
-                    bitmap = bmp.asImageBitmap(),
-                    contentDescription = "Captured Bitmap",
-                    modifier = Modifier
+                    bitmap             = displayBmp.asImageBitmap(),
+                    contentDescription = "Preview",
+                    modifier           = Modifier
                         .align(Alignment.Center)
-                        .padding(16.dp)
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp)
                 )
 
-                // [BARU] Loading indicator saat inferensi berjalan
+                // Spinner
                 if (isInferring) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.align(Alignment.Center),
-                        color = Color(0xFFB7F23A)
-                    )
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.Center)
+                            .background(Color.Black.copy(alpha = 0.65f), RoundedCornerShape(14.dp))
+                            .padding(horizontal = 28.dp, vertical = 20.dp)
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            CircularProgressIndicator(color = Color(0xFFB7F23A))
+                            Spacer(Modifier.height(10.dp))
+                            Text("Mendeteksi biji...", color = Color.White,
+                                fontWeight = FontWeight.SemiBold)
+                        }
+                    }
                 }
 
+                // Info bar hasil
+                scanResult?.let { res ->
+                    Surface(
+                        modifier = Modifier
+                            .align(Alignment.TopCenter)
+                            .padding(top = 16.dp, start = 16.dp, end = 16.dp)
+                            .fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        color = Color.Black.copy(alpha = 0.72f)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment     = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text("Total terdeteksi : ${res.aggregated.totalBeans}",
+                                    color = Color.White, style = MaterialTheme.typography.bodySmall)
+                                Text("Nilai cacat : ${"%.2f".format(res.aggregated.totalScore)}",
+                                    color = Color.White, style = MaterialTheme.typography.bodySmall)
+                            }
+                            Text(res.gradeText, color = Color(0xFFB7F23A),
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.ExtraBold)
+                        }
+                    }
+                }
+
+                // Tombol
                 Row(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
-                        .padding(16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        .padding(start = 16.dp, end = 16.dp, bottom = 32.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment     = Alignment.CenterVertically,
                 ) {
                     OutlinedButton(
-                        onClick = { capturedBitmap = null },
-                        enabled = !isInferring,
-                        colors = ButtonDefaults.outlinedButtonColors(
-                            containerColor = Color.White,
-                            contentColor = Color.Black
-                        ),
+                        onClick  = { reset() },
+                        enabled  = !isInferring && !isSaving,
+                        colors   = ButtonDefaults.outlinedButtonColors(
+                            containerColor = Color.White, contentColor = Color.Black),
                         border = BorderStroke(2.dp, Color(0xFFB7F23A)),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Text("Tutup Preview", fontWeight = FontWeight.SemiBold)
-                    }
+                        shape  = RoundedCornerShape(12.dp),
+                    ) { Text("Kembali", fontWeight = FontWeight.SemiBold) }
 
-                    Button(
-                        onClick = {
-                            val name = batchName.ifBlank { "Sampel" }
-                            val startMs = System.currentTimeMillis()
-
-                            scope.launch {
-                                isInferring = true
-                                try {
-                                    // [BARU] Simpan gambar dulu (IO thread)
-                                    val (imagePath, thumbnailPath) = withContext(Dispatchers.IO) {
-                                        saveBitmapAndThumbnail(context, bmp)
-                                    }
-
-                                    // [BARU] Inferensi di Default thread (bukan Main)
-                                    val inferenceResult = withContext(Dispatchers.Default) {
-                                        inferenceEngine.runInference(bmp)
-                                    }
-
-                                    val durationMs = System.currentTimeMillis() - startMs
-
-                                    inferenceResult
-                                        .onSuccess { detections ->
-                                            val aggregated = DefectAggregator.aggregate(detections)
-                                            val gradeText  = GradePolicy.gradeFromScore(
-                                                aggregated.totalScore, coffeeType
-                                            )
-                                            // [BARU] Simpan hasil penuh ke Room via ScanViewModel
-                                            scanVm.finishScanFromDetections(
-                                                batchName      = name,
-                                                aggregated     = aggregated,
-                                                gradeText      = gradeText,
-                                                scanDurationMs = durationMs,
-                                                sampleInfoId   = sampleInfoId,
-                                                imagePath      = imagePath,
-                                                thumbnailPath  = thumbnailPath,
-                                                onDone         = { historyId ->
-                                                    onSaveAndShowDetail(historyId)
-                                                }
-                                            )
-                                        }
-                                        .onFailure { err ->
-                                            android.util.Log.e("CameraScreen", "Inferensi gagal", err)
-                                            Toast.makeText(
-                                                context,
-                                                "Gagal menjalankan model: ${err.message}",
-                                                Toast.LENGTH_SHORT
-                                            ).show()
-                                        }
-                                } finally {
-                                    isInferring = false
-                                }
-                            }
-                        },
-                        enabled = !isInferring,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = Color(0xFFB7F23A),
-                            contentColor = Color.Black
-                        ),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Text("Simpan & Lihat Hasil", fontWeight = FontWeight.SemiBold)
+                    scanResult?.let { res ->
+                        Button(
+                            onClick = {
+                                isSaving = true
+                                scanVm.finishScanFromDetections(
+                                    batchName      = batchName.ifBlank { "Sampel" },
+                                    aggregated     = res.aggregated,
+                                    gradeText      = res.gradeText,
+                                    scanDurationMs = res.durationMs,
+                                    sampleInfoId   = sampleInfoId,
+                                    imagePath      = res.imagePath,
+                                    thumbnailPath  = res.thumbnailPath,
+                                    onDone         = { historyId -> onSaveAndShowDetail(historyId) }
+                                )
+                            },
+                            enabled = !isSaving,
+                            colors  = ButtonDefaults.buttonColors(
+                                containerColor = Color(0xFFB7F23A), contentColor = Color.Black),
+                            shape = RoundedCornerShape(12.dp),
+                        ) {
+                            if (isSaving) CircularProgressIndicator(
+                                Modifier.size(18.dp), Color.Black, strokeWidth = 2.dp)
+                            else Text("Simpan & Lihat Hasil", fontWeight = FontWeight.SemiBold)
+                        }
                     }
                 }
             }
@@ -374,105 +359,61 @@ fun CameraScreen(
     }
 }
 
-
 // =============================================================================
-// Helper functions (tidak diubah dari versi asli)
+// Helpers
 // =============================================================================
 
-/** Simpan gambar penuh + thumbnail ke folder scans; return (imagePath, thumbnailPath) */
-private suspend fun saveBitmapAndThumbnail(context: Context, bitmap: Bitmap): Pair<String?, String?> {
-    return withContext(Dispatchers.IO) {
-        val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(System.currentTimeMillis())
-        val scansDir = File(context.filesDir, "scans").apply { if (!exists()) mkdirs() }
-        val imageFile = File(scansDir, "img_$timestamp.jpg")
-        val thumbFile = File(scansDir, "thumb_$timestamp.jpg")
+private suspend fun saveBitmapAndThumbnail(ctx: Context, bmp: Bitmap): Pair<String?,String?> =
+    withContext(Dispatchers.IO) {
+        val ts   = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
+        val dir  = File(ctx.filesDir, "scans").apply { if (!exists()) mkdirs() }
+        val img  = File(dir, "img_$ts.jpg")
+        val thmb = File(dir, "thumb_$ts.jpg")
         try {
-            FileOutputStream(imageFile).use { out ->
-                bitmap.compress(Bitmap.CompressFormat.JPEG, 90, out)
-            }
-            val thumb = BitmapUtils.scaleToMaxSide(bitmap, 400)
-            FileOutputStream(thumbFile).use { out ->
-                thumb.compress(Bitmap.CompressFormat.JPEG, 85, out)
-            }
-            if (thumb != bitmap) thumb.recycle()
-            Pair(imageFile.absolutePath, thumbFile.absolutePath)
-        } catch (e: Exception) {
-            android.util.Log.e("CameraScreen", "Save image failed", e)
-            Pair(null, null)
-        }
+            FileOutputStream(img).use  { bmp.compress(Bitmap.CompressFormat.JPEG, 90, it) }
+            val t = BitmapUtils.scaleToMaxSide(bmp, 400)
+            FileOutputStream(thmb).use { t.compress(Bitmap.CompressFormat.JPEG, 85, it) }
+            if (t != bmp) t.recycle()
+            Pair(img.absolutePath, thmb.absolutePath)
+        } catch (e: Exception) { Pair(null, null) }
     }
-}
 
-/** Muat bitmap dari Uri galeri + rotasi EXIF. */
-private fun loadBitmapFromUri(context: Context, uri: Uri): Bitmap? {
-    return try {
-        val bitmap = context.contentResolver.openInputStream(uri)?.use { input ->
-            BitmapFactory.decodeStream(input)
-        } ?: return null
-        val exif = context.contentResolver.openInputStream(uri)?.use { ExifInterface(it) }
-        if (exif == null) return bitmap
-        val orientation = exif.getAttributeInt(
-            ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL
-        )
-        val degrees = when (orientation) {
-            ExifInterface.ORIENTATION_ROTATE_90  -> 90f
-            ExifInterface.ORIENTATION_ROTATE_180 -> 180f
-            ExifInterface.ORIENTATION_ROTATE_270 -> 270f
-            else -> 0f
-        }
-        if (degrees == 0f) return bitmap
-        val matrix = Matrix().apply { postRotate(degrees) }
-        Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true).also {
-            if (it != bitmap) bitmap.recycle()
-        }
-    } catch (e: Exception) {
-        android.util.Log.e("CameraScreen", "loadBitmapFromUri failed", e)
-        null
-    }
-}
+private fun loadBitmapFromUri(ctx: Context, uri: Uri): Bitmap? = try {
+    val bmp = ctx.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it) }
+        ?: return null
+    val ori = ctx.contentResolver.openInputStream(uri)?.use { ExifInterface(it) }
+        ?.getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)
+        ?: ExifInterface.ORIENTATION_NORMAL
+    rotateBitmap(bmp, ori)
+} catch (e: Exception) { null }
 
-/** Rotasi bitmap sesuai EXIF orientation. */
-private fun rotateBitmapByExif(bitmap: Bitmap, path: String): Bitmap {
-    val exif = ExifInterface(path)
-    val orientation = exif.getAttributeInt(
-        ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL
-    )
-    val degrees = when (orientation) {
+private fun rotateBitmapByExif(bmp: Bitmap, path: String): Bitmap =
+    rotateBitmap(bmp, ExifInterface(path)
+        .getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL))
+
+private fun rotateBitmap(src: Bitmap, ori: Int): Bitmap {
+    val deg = when (ori) {
         ExifInterface.ORIENTATION_ROTATE_90  -> 90f
         ExifInterface.ORIENTATION_ROTATE_180 -> 180f
         ExifInterface.ORIENTATION_ROTATE_270 -> 270f
-        else -> 0f
+        else -> return src
     }
-    if (degrees == 0f) return bitmap
-    val matrix = Matrix().apply { postRotate(degrees) }
-    return Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
+    return Bitmap.createBitmap(src, 0, 0, src.width, src.height,
+        Matrix().apply { postRotate(deg) }, true).also { if (it != src) src.recycle() }
 }
 
-private fun capturePhotoToBitmap(
-    context: Context,
-    imageCapture: ImageCapture,
-    onBitmapReady: (Bitmap) -> Unit,
-) {
-    val photoFile = File(
-        context.cacheDir,
-        SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(System.currentTimeMillis()) + ".jpg"
-    )
-    val outputOptions = ImageCapture.OutputFileOptions.Builder(photoFile).build()
-    imageCapture.takePicture(
-        outputOptions,
-        ContextCompat.getMainExecutor(context),
+private fun capturePhotoToBitmap(ctx: Context, cap: ImageCapture, cb: (Bitmap) -> Unit) {
+    val f = File(ctx.cacheDir, SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date()) + ".jpg")
+    cap.takePicture(
+        ImageCapture.OutputFileOptions.Builder(f).build(),
+        ContextCompat.getMainExecutor(ctx),
         object : ImageCapture.OnImageSavedCallback {
-            override fun onImageSaved(outputFileResults: ImageCapture.OutputFileResults) {
-                var bitmap = BitmapFactory.decodeFile(photoFile.absolutePath)
-                if (bitmap != null) {
-                    bitmap = rotateBitmapByExif(bitmap, photoFile.absolutePath)
-                    onBitmapReady(bitmap)
-                } else {
-                    Toast.makeText(context, "Failed to decode bitmap", Toast.LENGTH_SHORT).show()
-                }
+            override fun onImageSaved(r: ImageCapture.OutputFileResults) {
+                BitmapFactory.decodeFile(f.absolutePath)?.let { cb(rotateBitmapByExif(it, f.absolutePath)) }
+                    ?: Toast.makeText(ctx, "Failed to decode bitmap", Toast.LENGTH_SHORT).show()
             }
-            override fun onError(exception: ImageCaptureException) {
-                Toast.makeText(context, "Capture failed: ${exception.message}", Toast.LENGTH_SHORT).show()
+            override fun onError(e: ImageCaptureException) {
+                Toast.makeText(ctx, "Capture failed: ${e.message}", Toast.LENGTH_SHORT).show()
             }
         }
     )

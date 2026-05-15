@@ -30,7 +30,7 @@ object ModelConfig {
     const val PROTO_SIZE = 160
 
     /** Threshold confidence deteksi */
-    const val CONFIDENCE_THRESHOLD = 0.5f
+    const val CONFIDENCE_THRESHOLD = 0.3f
 
     /** Threshold IoU untuk Non-Maximum Suppression */
     const val IOU_THRESHOLD = 0.45f
