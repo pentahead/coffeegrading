@@ -94,14 +94,17 @@ fun SniStandardScreen(
             SniArticleSection(
                 number = "3.",
                 title = "Klasifikasi Mutu (Sistem Nilai Cacat)",
-                content = "Penentuan besaran mutu untuk Kopi Robusta didasarkan pada jumlah nilai cacat dalam 300 gram sampel:\n\n" +
+                content = "Penentuan besaran mutu didasarkan pada jumlah nilai cacat dalam 300 gram sampel.\n\n" +
+                        "Kopi Robusta:\n" +
                         "Mutu 1: Nilai cacat maksimal 11\n" +
                         "Mutu 2: Nilai cacat 12 - 25\n" +
                         "Mutu 3: Nilai cacat 26 - 44\n" +
                         "Mutu 4a: Nilai cacat 45 - 60\n" +
                         "Mutu 4b: Nilai cacat 61 - 80\n" +
                         "Mutu 5: Nilai cacat 81 - 150\n" +
-                        "Mutu 6: Nilai cacat 151 - 225"
+                        "Mutu 6: Nilai cacat 151 - 225\n\n" +
+                        "Kopi Arabika: rentang nilai sama, tetapi Mutu 4 tidak dibagi 4a/4b " +
+                        "(satu kelas Mutu 4 untuk nilai cacat 45 - 80)."
             )
 
             SniArticleSection(

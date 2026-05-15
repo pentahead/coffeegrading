@@ -1,0 +1,178 @@
+# ==============================================================================
+# COFFEGRADER — DOKUMEN KONTEKS UNTUK AGEN AI (IMPLEMENTASI KODE)
+# ==============================================================================
+# Cara pakai: salin seluruh file ini ke prompt. Ikuti urutan bagian
+# IMPLEMENTATION_ORDER. Jika informasi model tidak lengkap, STOP dan minta
+# pengguna mengisi bagian PRE_IMPLEMENTATION_INPUTS.
+# Bahasa isi dokumen: Indonesia (kode & nama file: bahasa Inggris OK).
+# ==============================================================================
+
+## DOCUMENT_PURPOSE
+Membantu agen AI menambahkan kembali: (1) inferensi TFLite, (2) agregasi nilai
+cacat / mutu SNI, (3) penyimpanan Room — tanpa mengubah tampilan atau teks UI
+CameraScreen yang sudah ada.
+
+## PROJECT_IDENTITY
+- Root repo: coffegraderApps
+- ApplicationId: id.my.faruq.coffegrader
+- Root package: id.my.faruq.coffegrader
+- Build: Kotlin 17, compileSdk 34, minSdk 29, Compose + Material3, Hilt, Room KSP
+
+## CURRENT_STATE (FAKTA — JANGAN ASUMSI MASIH ADA ML)
+- TensorFlow Lite: TIDAK ada di app/build.gradle.kts (tambahkan saat implementasi).
+- Folder app/src/main/java/.../ml/ : kosong (atau belum dipakai).
+- File .tflite di res/raw: tidak ada (tambahkan model baru saat siap).
+- CameraScreen: CameraX + grid + flash + galeri + preview + simpan gambar;
+  saat simpan memanggil ScanViewModel.finishScan(...) dengan placeholder
+  (defectScore=0, gradeText="Belum dinilai", defects kosong).
+- ScanViewModel: hanya finishScan(...); tidak ada finishScanFromMl.
+- GradeColors: warna Mutu 1–6 + BELUM_DINILAI (abu) untuk string mengandung "belum".
+
+## HARD_CONSTRAINTS (WAJIB — OVERRIDE DESAIN LAIN)
+C1. Jangan mengubah layout Compose CameraScreen: struktur Scaffold/Box/Row,
+    teks tombol ("Tutup Preview", "Simpan & Lihat Hasil", dll.), dan alur
+    navigasi callback onSaveAndShowDetail(historyId).
+C2. Inferensi berat TIDAK di Main thread; gunakan coroutine + Dispatchers.Default
+    atau IO, atau executor khusus.
+C3. Jangan menyatukan parsing tensor besar di dalam @Composable (pisahkan ke
+    kelas non-Compose / ViewModel / use case).
+C4. Ikuti gaya proyek: Hilt untuk VM, Room lewat repository yang sudah ada jika
+    memungkinkan; hindari duplikasi bobot SNI di banyak file.
+
+## SOFT_RECOMMENDATIONS (BOLEH DITOLAK JIKA ADA DESAIN LEBIH BAIK)
+- Satu Interpreter TFLite per proses (lazy singleton); hindari new Interpreter
+  per frame.
+- Serialize akses Interpreter (Mutex / single thread) jika ada risiko race.
+- Satu sumber kebenaran urutan nama kelas (list const) + index kelas "normal".
+
+## PRE_IMPLEMENTATION_INPUTS (ISI / TANYAKAN JIKA KOSONG — JANGAN TEBAK)
+Tanyakan atau baca dari metadata export model:
+  P1. Path file model: res/raw/<nama>.tflite atau assets/<nama>.tflite ?
+  P2. Bentuk tensor INPUT: shape, NHWC vs NCHW, tipe UINT8 vs FLOAT32, ukuran
+      lebar×tinggi, normalisasi (÷255, mean/std, letterbox?).
+  P3. Bentuk tensor OUTPUT: rank, dimensi, arti channel (bbox, class logits,
+      mask protos, dsb.).
+  P4. Apakah ada NMS di graf TFLite atau harus NMS di Kotlin?
+  P5. Daftar nama kelas urutan index 0..N-1 (harus match output model).
+  P6. Index kelas "normal / bukan cacat" (jika ada).
+  P7. Aturan bisnis: agregasi = jumlah deteksi × bobot per kelas, atau perlu
+      clustering bbox untuk "satu biji satu bobot maks"?
+  P8. coffeeType dari sampel: nilai pasti di DB ("Arabika"|"Robusta"?) untuk
+      cabang mutu 4 (Arabika tunggal vs 4a/4b).
+
+## DATA_FLOW (TARGET SETELAH ML ADA)
+1) SampleInput → Room sample_info → navigasi ke Camera dengan sampleInfoId.
+2) CameraViewModel memuat batchName + coffeeType dari Room (sudah ada).
+3) User capture / galeri → Bitmap (sudah ada di CameraScreen).
+4) [BARU] Engine ML: Bitmap → Result / Either dengan List<Detection> (lihat kontrak).
+5) [BARU] Grading: List<Detection> + coffeeType → defectScore, gradeText,
+   daftar agregasi per jenis cacat untuk scan_defect.
+6) ScanViewModel menyimpan via ScanRepository.saveScanResult(...) seperti
+   sebelumnya (lihat ScanHistoryEntity, ScanDefectEntity).
+7) onSaveAndShowDetail(historyId) — tidak diubah.
+
+## ROOM_CONTRACT (JANGAN UBAH SKEMA TANPA MIGRASI)
+- DB name: coffeegrader_db (DatabaseModule).
+- Entities: SampleInfoEntity, ScanHistoryEntity, ScanDefectEntity, GradingEntity.
+- fallbackToDestructiveMigration() aktif: naik version tanpa migration = data
+  hilang; koordinasikan dengan user sebelum bump version.
+- Field relevan scan_history: defectScore (Double), gradeText (String),
+  totalBeans (Int), imagePath, thumbnailPath, sampleInfoId, scanDurationMs.
+
+## SUGGESTED_PUBLIC_API (IMPLEMENTASI AI — SESUAIKAN NAMA DENGAN MODEL ANDA)
+Minimal yang harus terpenuhi secara perilaku (bukan nama mutlak):
+
+  (A) suspend fun runInference(bitmap: Bitmap): Result<List<DetectionDto>>
+      DetectionDto minimal: classIndex: Int, score: Float
+      Opsional sesuai model: bbox, mask coefficients, dsb.
+
+  (B) fun aggregateDefects(detections: List<DetectionDto>): AggregatedDefects
+      Output: totalScore: Double, rows untuk scan_defect (nama tampilan,
+      count, defectValue per baris), totalBeansCount (definisikan eksplisit).
+
+  (C) fun gradeFromScore(totalScore: Double, coffeeType: String?): String
+      Output: "Mutu 1" .. "Mutu 6" / "Mutu 4a" / "Mutu 4b" / "Mutu 4" / di luar
+      standar — harus konsisten dengan GradeColors (lihat util/GradeColors.kt).
+
+  (D) ScanViewModel: tambahkan kembali metode persistensi yang menerima hasil
+      (A)(B)(C) + path gambar + duration ms + sampleInfoId; hindari duplikasi
+      logika simpan Room di CameraScreen.
+
+## SUGGESTED_FILE_LAYOUT (RELATIF app/src/main/java/id/my/faruq/coffegrader/)
+Opsi modular (disarankan):
+  ml/CoffeeLabelTaxonomy.kt     — NAMES: List<String>, NORMAL_CLASS_INDEX
+  ml/ModelConfig.kt             — MODEL_RES_ID atau path assets, input W/H, threshold
+  ml/<Nama>Decoder.kt           — parsing tensor mentah → List<DetectionDto>
+  ml/<Nama>InferenceEngine.kt   — load Interpreter, preprocess, run, decode
+  ml/DefectWeights.kt           — bobot per classIndex atau per name (satu sumber)
+  ml/GradePolicy.kt             — totalScore + coffeeType → gradeText
+
+Opsi tipis (hanya jika model sangat sederhana):
+  ml/<Nama>ModelRunner.kt       — semua dalam satu file + data class internal
+
+## INTEGRATION_POINTS (FILE YANG BOLEH DIUBAH — TANPA UBAH UI)
+- app/src/main/java/.../ui/camera/CameraScreen.kt
+  * Hanya: wiring — panggil engine setelah bitmap siap; set state hasil;
+    panggil VM simpan dengan data hasil ML. Jangan ubah teks/jarak visual.
+- app/src/main/java/.../ui/camera/CameraViewModel.kt
+  * Boleh expose modelResId / labels jika membantu; hindari logika tensor di sini.
+- app/src/main/java/.../ui/scan/ScanViewModel.kt
+  * Tambah kembali metode persistensi hasil ML (nama bebas: mis.
+    finishScanFromDetections(...)).
+- app/build.gradle.kts — tambah dependency TFLite saat diperlukan.
+- app/src/main/res/raw/ — tambah file .tflite (jangan commit file besar jika
+  kebijakan repo melarang; gunakan git-lfs atau instruksi manual).
+
+## ERROR_HANDLING_CHECKLIST
+- Gagal load model → Result.failure; UI: Toast (pattern sudah ada di project).
+- Bitmap null / width==0 → jangan inferensi.
+- Shape tensor tidak sesuai → log error + kembalikan empty / failure (jangan
+  hasil diam-diam salah).
+- OOM → tangkap; kurangi resolusi input atau batasi max side di preprocessing.
+
+## IMPLEMENTATION_ORDER (URUTAN KERJA UNTUK AI)
+1) Tambah dependency TFLite + (opsional) support library.
+2) Tambah file .tflite + ModelConfig + CoffeeLabelTaxonomy (sesuai P5/P6).
+3) Implementasikan Decoder + Engine; unit test decoder jika memungkinkan
+   (atau fungsi pure dengan tensor dummy kecil).
+4) Implementasikan DefectWeights + GradePolicy (pure Kotlin, mudah diuji).
+5) ScanViewModel: metode simpan hasil penuh (score, grade, defects, duration).
+6) CameraScreen: sambungkan pipeline bitmap → engine → VM simpan — tanpa ubah UI.
+7) Uji manual checklist di bawah.
+
+## VERIFICATION_CHECKLIST
+[ ] :app:compileDebugKotlin sukses.
+[ ] Capture + simpan: historyId valid, detail riwayat terbuka.
+[ ] defectScore & gradeText masuk akal vs kalkulator manual sampel.
+[ ] coffeeType Arabika vs Robusta mempengaruhi label mutu 4 jika aturan dipakai.
+[ ] Galeri + EXIF: orientasi gambar tidak salah.
+[ ] Tidak ANR saat inferensi satu foto ukuran wajar.
+
+## COMMON_FAILURE_MODES (HINDARI)
+- Urutan kelas di NAMES tidak sama dengan channel kelas di model.
+- Resize stretch menggantikan letterbox padahal bbox/mask membutuhkan letterbox.
+- Duplikat Interpreter atau close() terlalu awal → crash saat frame berikutnya.
+
+## OUT_OF_SCOPE_FOR_INITIAL_TASK
+- Redesign HomeScreen / HistoryScreen.
+- Mengubah skema Room tanpa persetujuan eksplisit (karena destructive migration).
+
+## REFERENCE_FILES (BACA SEBELUM EDIT)
+- ui/camera/CameraScreen.kt
+- ui/camera/CameraViewModel.kt
+- ui/scan/ScanViewModel.kt
+- data/repository/ScanRepository.kt (atau DAO terkait save scan)
+- data/local/entity/ScanHistoryEntity.kt, ScanDefectEntity.kt
+- util/GradeColors.kt
+- ui/navigation/AppNavHost.kt
+- di/DatabaseModule.kt (package id.my.faruq.coffegrader.data.di)
+
+## HUMAN_OVERRIDE
+Jika desain teknis pengguna lebih sederhana atau lebih aman, asalkan
+HARD_CONSTRAINTS terpenuhi, prioritaskan desain pengguna dan perbarui dokumen
+ini setelah selesai (path model, nama file, keputusan P7/P8).
+
+# ==============================================================================
+# AKHIR DOKUMEN — perbarui PRE_IMPLEMENTATION_INPUTS & SUGGESTED_FILE_LAYOUT
+# setelah model terpasang dan pipeline jalan.
+# ==============================================================================

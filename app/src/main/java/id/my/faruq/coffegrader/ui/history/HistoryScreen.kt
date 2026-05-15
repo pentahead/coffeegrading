@@ -46,6 +46,7 @@ private val QUICK_MUTU_TABS = listOf(
     "1" to "Mutu 1",
     "2" to "Mutu 2",
     "3" to "Mutu 3",
+    "4" to "Mutu 4 (Arabika)",
     "4a" to "Mutu 4a",
     "4b" to "Mutu 4b",
     "5" to "Mutu 5",
@@ -120,7 +121,12 @@ fun HistoryScreen(
     }
 
     fun gradeOrder(gradeText: String): Int = when (normalizeGrade(gradeText)) {
-        "1" -> 1; "2" -> 2; "3" -> 3; "4a" -> 4; "4b" -> 5; "5" -> 6; "6" -> 7
+        "1" -> 1
+        "2" -> 2
+        "3" -> 3
+        "4", "4a", "4b" -> 4
+        "5" -> 5
+        "6" -> 6
         else -> 0
     }
 
