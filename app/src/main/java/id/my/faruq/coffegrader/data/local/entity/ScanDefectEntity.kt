@@ -14,5 +14,6 @@ data class ScanDefectEntity(
 
     val defectName: String,
     val defectCount: Int,
+    /** Bobot SNI per biji (kolom "Nilai Cacat"); total baris = defectValue × defectCount */
     val defectValue: Double
 )

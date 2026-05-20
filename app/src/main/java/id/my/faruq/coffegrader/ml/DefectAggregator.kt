@@ -13,7 +13,7 @@ package id.my.faruq.coffegrader.ml
  *     dominan (class score tertinggi), sehingga aturan ini sudah terpenuhi
  *     secara implisit oleh decoder. Namun jika di masa depan ada pipeline
  *     multi-label per bbox, gunakan maxDefectPerBean() di bawah.
- *   - biji_normal (index 10, bobot = 0) ikut dihitung ke totalBeans
+ *   - biji_normal (index 2, bobot = 0) ikut dihitung ke totalBeans
  *     tapi tidak menambah defect score.
  */
 object DefectAggregator {
@@ -34,20 +34,21 @@ object DefectAggregator {
 
         for ((classIndex, count) in countMap) {
             val weight = DefectWeights.weightOf(classIndex)
-            val defectValue = count * weight
+            val lineTotal = count * weight
 
             rows.add(
                 DefectRow(
                     defectName  = CoffeeLabelTaxonomy.NAMES.getOrElse(classIndex) { "unknown" },
                     count       = count,
-                    defectValue = defectValue,
+                    // Bobot SNI per biji/objek — tetap konstan, tidak dikali jumlah
+                    defectValue = weight,
                 )
             )
-            totalScore += defectValue
+            totalScore += lineTotal
         }
 
-        // Sort: nilai cacat terbesar di atas untuk tampilan UI
-        rows.sortByDescending { it.defectValue }
+        // Sort: kontribusi total terbesar di atas (jumlah × bobot)
+        rows.sortByDescending { it.defectValue * it.count }
 
         return AggregatedDefects(
             totalScore = totalScore,

@@ -13,10 +13,12 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import android.view.Surface
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageCaptureException
 import androidx.camera.core.Preview
+import androidx.camera.core.UseCaseGroup
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.BorderStroke
@@ -33,6 +35,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
@@ -53,6 +56,7 @@ import id.my.faruq.coffegrader.ui.scan.ScanViewModel
 import id.my.faruq.coffegrader.util.BitmapUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
@@ -99,6 +103,8 @@ fun CameraScreen(
     }
     var isFlashOn by remember { mutableStateOf(false) }
     var camera    by remember { mutableStateOf<androidx.camera.core.Camera?>(null) }
+    var previewView by remember { mutableStateOf<PreviewView?>(null) }
+    var previewLayoutSize by remember { mutableStateOf(IntSize.Zero) }
     val hasFlash = camera?.cameraInfo?.hasFlashUnit() == true
 
     var capturedBitmap by remember { mutableStateOf<Bitmap?>(null) }
@@ -114,6 +120,19 @@ fun CameraScreen(
 
     val imageCapture = remember {
         ImageCapture.Builder().setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY).build()
+    }
+
+    // Preview + capture memakai ViewPort yang sama agar FOV WYSIWYG
+    LaunchedEffect(previewView, previewLayoutSize, hasPermission, lifecycleOwner) {
+        if (!hasPermission) return@LaunchedEffect
+        val pv = previewView ?: return@LaunchedEffect
+        bindPreviewAndCapture(
+            context        = context,
+            lifecycleOwner = lifecycleOwner,
+            previewView    = pv,
+            imageCapture   = imageCapture,
+            onCameraBound  = { camera = it },
+        )
     }
 
     fun reset() { capturedBitmap = null; scanResult = null; isInferring = false; isSaving = false }
@@ -195,25 +214,18 @@ fun CameraScreen(
         Box(modifier = Modifier.fillMaxSize()) {
             if (hasPermission) {
                 AndroidView(
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .onGloballyPositioned { coords ->
+                            val size = coords.size
+                            if (size != previewLayoutSize) previewLayoutSize = size
+                        },
                     factory  = { ctx ->
-                        PreviewView(ctx).also { pv ->
-                            ProcessCameraProvider.getInstance(ctx).addListener({
-                                val prov = ProcessCameraProvider.getInstance(ctx).get()
-                                val prev = Preview.Builder().build()
-                                    .also { it.setSurfaceProvider(pv.surfaceProvider) }
-                                try {
-                                    prov.unbindAll()
-                                    camera = prov.bindToLifecycle(
-                                        lifecycleOwner, CameraSelector.DEFAULT_BACK_CAMERA,
-                                        prev, imageCapture
-                                    )
-                                } catch (e: Exception) {
-                                    android.util.Log.e("CameraScreen", "bind failed", e)
-                                }
-                            }, ContextCompat.getMainExecutor(ctx))
-                        }
-                    }
+                        PreviewView(ctx).apply {
+                            scaleType = PreviewView.ScaleType.FILL_CENTER
+                            implementationMode = PreviewView.ImplementationMode.COMPATIBLE
+                        }.also { previewView = it }
+                    },
                 )
             }
 
@@ -231,7 +243,7 @@ fun CameraScreen(
 
                     IconButton(
                         onClick  = {
-                            capturePhotoToBitmap(context, imageCapture) { bmp ->
+                            capturePhotoToBitmap(context, imageCapture, previewView) { bmp ->
                                 reset(); capturedBitmap = bmp; runInference(bmp)
                             }
                         },
@@ -260,10 +272,10 @@ fun CameraScreen(
                 Image(
                     bitmap             = displayBmp.asImageBitmap(),
                     contentDescription = "Preview",
+                    contentScale       = ContentScale.Crop,
                     modifier           = Modifier
-                        .align(Alignment.Center)
-                        .fillMaxWidth()
-                        .padding(horizontal = 12.dp)
+                        .fillMaxSize()
+                        .align(Alignment.Center),
                 )
 
                 // Spinner
@@ -360,6 +372,74 @@ fun CameraScreen(
 }
 
 // =============================================================================
+// Camera bind — Preview & ImageCapture share ViewPort (WYSIWYG)
+// =============================================================================
+
+private suspend fun bindPreviewAndCapture(
+    context: Context,
+    lifecycleOwner: androidx.lifecycle.LifecycleOwner,
+    previewView: PreviewView,
+    imageCapture: ImageCapture,
+    onCameraBound: (androidx.camera.core.Camera?) -> Unit,
+) {
+    val provider = suspendCancellableCoroutine<ProcessCameraProvider> { cont ->
+        val future = ProcessCameraProvider.getInstance(context)
+        future.addListener(
+            { cont.resume(future.get()) },
+            ContextCompat.getMainExecutor(context),
+        )
+    }
+
+    withContext(Dispatchers.Main) {
+        suspendCancellableCoroutine { cont ->
+            fun doBind() {
+                val preview = Preview.Builder().build().also {
+                    it.setSurfaceProvider(previewView.surfaceProvider)
+                }
+                imageCapture.targetRotation =
+                    previewView.display?.rotation ?: Surface.ROTATION_0
+
+                try {
+                    provider.unbindAll()
+                    val viewport = previewView.viewPort
+                    onCameraBound(
+                        if (viewport != null) {
+                            val group = UseCaseGroup.Builder()
+                                .setViewPort(viewport)
+                                .addUseCase(preview)
+                                .addUseCase(imageCapture)
+                                .build()
+                            provider.bindToLifecycle(
+                                lifecycleOwner,
+                                CameraSelector.DEFAULT_BACK_CAMERA,
+                                group,
+                            )
+                        } else {
+                            provider.bindToLifecycle(
+                                lifecycleOwner,
+                                CameraSelector.DEFAULT_BACK_CAMERA,
+                                preview,
+                                imageCapture,
+                            )
+                        }
+                    )
+                } catch (e: Exception) {
+                    android.util.Log.e("CameraScreen", "bind failed", e)
+                    onCameraBound(null)
+                }
+                cont.resume(Unit)
+            }
+
+            if (previewView.width > 0 && previewView.height > 0) {
+                doBind()
+            } else {
+                previewView.post { doBind() }
+            }
+        }
+    }
+}
+
+// =============================================================================
 // Helpers
 // =============================================================================
 
@@ -402,7 +482,13 @@ private fun rotateBitmap(src: Bitmap, ori: Int): Bitmap {
         Matrix().apply { postRotate(deg) }, true).also { if (it != src) src.recycle() }
 }
 
-private fun capturePhotoToBitmap(ctx: Context, cap: ImageCapture, cb: (Bitmap) -> Unit) {
+private fun capturePhotoToBitmap(
+    ctx: Context,
+    cap: ImageCapture,
+    previewView: PreviewView?,
+    cb: (Bitmap) -> Unit,
+) {
+    previewView?.display?.rotation?.let { cap.targetRotation = it }
     val f = File(ctx.cacheDir, SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date()) + ".jpg")
     cap.takePicture(
         ImageCapture.OutputFileOptions.Builder(f).build(),

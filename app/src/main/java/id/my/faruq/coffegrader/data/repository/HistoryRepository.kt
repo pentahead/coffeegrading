@@ -170,9 +170,9 @@ class HistoryRepository @Inject constructor(
                 DefectRowUi(
                     no = index + 1,
                     defectName = defect.defectName,
-                    defectScore = defect.defectValue,
+                    defectScore = defect.defectValue,   // bobot SNI per biji
                     count = defect.defectCount,
-                    totalScore = defect.defectValue * defect.defectCount.toDouble()
+                    totalScore = defect.defectValue * defect.defectCount.toDouble(),
                 )
             }
         }

@@ -46,5 +46,6 @@ data class AggregatedDefects(
 data class DefectRow(
     val defectName  : String,
     val count       : Int,
+    /** Bobot nilai cacat SNI per biji (lihat [DefectWeights]), bukan total baris. */
     val defectValue : Double,
 )

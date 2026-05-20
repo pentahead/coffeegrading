@@ -75,7 +75,7 @@ class ScanViewModel @Inject constructor(
 
             // Konversi DefectRow → ScanDefectEntity (historyId diisi oleh repository)
             val defectEntities = aggregated.rows
-                .filter { it.defectValue > 0.0 } // skip biji_normal (bobot = 0)
+                .filter { it.defectValue > 0.0 } // skip kelas bobot 0 (mis. biji_normal)
                 .map { row ->
                     ScanDefectEntity(
                         historyId   = 0L, // akan di-overwrite di ScanRepository.saveScanResult
