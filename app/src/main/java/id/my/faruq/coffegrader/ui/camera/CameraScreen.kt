@@ -56,7 +56,8 @@ import id.my.faruq.coffegrader.ui.scan.ScanViewModel
 import id.my.faruq.coffegrader.util.BitmapUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlin.coroutines.resume
+import kotlin.coroutines.suspendCoroutine
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
@@ -382,7 +383,7 @@ private suspend fun bindPreviewAndCapture(
     imageCapture: ImageCapture,
     onCameraBound: (androidx.camera.core.Camera?) -> Unit,
 ) {
-    val provider = suspendCancellableCoroutine<ProcessCameraProvider> { cont ->
+    val provider = suspendCoroutine { cont ->
         val future = ProcessCameraProvider.getInstance(context)
         future.addListener(
             { cont.resume(future.get()) },
@@ -391,7 +392,7 @@ private suspend fun bindPreviewAndCapture(
     }
 
     withContext(Dispatchers.Main) {
-        suspendCancellableCoroutine { cont ->
+        suspendCoroutine { cont ->
             fun doBind() {
                 val preview = Preview.Builder().build().also {
                     it.setSurfaceProvider(previewView.surfaceProvider)
