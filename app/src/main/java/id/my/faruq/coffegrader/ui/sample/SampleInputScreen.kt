@@ -1,7 +1,10 @@
 package id.my.faruq.coffegrader.ui.sample
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -14,10 +17,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.launch
 
-private val CardBorderColor = Color(0xFF12A150)
+private val CardBorderColor = SampleAccentColor
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun SampleInputScreen(
     vm: SampleInputViewModel,
@@ -26,10 +30,17 @@ fun SampleInputScreen(
 ) {
     val state by vm.uiState.collectAsState()
     val scrollState = rememberScrollState()
+    val coroutineScope = rememberCoroutineScope()
     var submitAttempted by remember { mutableStateOf(false) }
     var batchTouched by remember { mutableStateOf(false) }
     var moistureTouched by remember { mutableStateOf(false) }
     var dirtTouched by remember { mutableStateOf(false) }
+
+    val batchBringIntoView = remember { BringIntoViewRequester() }
+    val moistureBringIntoView = remember { BringIntoViewRequester() }
+    val dirtBringIntoView = remember { BringIntoViewRequester() }
+
+    val isFormValid = vm.isFormValid()
 
     val batchError = when {
         !(submitAttempted || batchTouched) -> null
@@ -106,20 +117,17 @@ fun SampleInputScreen(
                         fontWeight = FontWeight.SemiBold
                     )
 
-                    OutlinedTextField(
+                    SampleLabeledTextField(
+                        label = "Batch ID / Kode Sampel",
                         value = state.batchId,
                         onValueChange = {
                             batchTouched = true
                             vm.updateBatchId(it)
                         },
-                        label = { Text("Batch ID / Kode Sampel") },
-                        modifier = Modifier.fillMaxWidth(),
+                        placeholder = "Masukkan nama batch atau kode sample",
+                        modifier = Modifier.bringIntoViewRequester(batchBringIntoView),
                         isError = batchError != null,
-                        supportingText = {
-                            if (batchError != null) {
-                                Text(batchError)
-                            }
-                        }
+                        errorText = batchError
                     )
 
                     DropdownField(
@@ -190,36 +198,30 @@ fun SampleInputScreen(
                         Text("Ada bau kapang/busuk", style = MaterialTheme.typography.bodyMedium)
                     }
 
-                    OutlinedTextField(
+                    SampleLabeledTextField(
+                        label = "Kadar Air (%) max 12.5",
                         value = state.moisture,
                         onValueChange = {
                             moistureTouched = true
                             vm.updateMoisture(it)
                         },
-                        label = { Text("Kadar Air (%) max 12.5") },
-                        modifier = Modifier.fillMaxWidth(),
+                        placeholder = "Masukkan kadar air",
+                        modifier = Modifier.bringIntoViewRequester(moistureBringIntoView),
                         isError = moistureError != null,
-                        supportingText = {
-                            if (moistureError != null) {
-                                Text(moistureError)
-                            }
-                        }
+                        errorText = moistureError
                     )
 
-                    OutlinedTextField(
+                    SampleLabeledTextField(
+                        label = "Kadar Kotoran (%) max 0.5",
                         value = state.dirt,
                         onValueChange = {
                             dirtTouched = true
                             vm.updateDirt(it)
                         },
-                        label = { Text("Kadar Kotoran (%) max 0.5") },
-                        modifier = Modifier.fillMaxWidth(),
+                        placeholder = "Masukkan kadar kotoran",
+                        modifier = Modifier.bringIntoViewRequester(dirtBringIntoView),
                         isError = dirtError != null,
-                        supportingText = {
-                            if (dirtError != null) {
-                                Text(dirtError)
-                            }
-                        }
+                        errorText = dirtError
                     )
 
                     Spacer(Modifier.height(8.dp))
@@ -227,13 +229,38 @@ fun SampleInputScreen(
                     Button(
                         onClick = {
                             submitAttempted = true
+                            batchTouched = true
+                            moistureTouched = true
+                            dirtTouched = true
+
+                            if (!isFormValid) {
+                                val targetRequester = when {
+                                    state.batchId.isBlank() -> batchBringIntoView
+                                    state.moisture.isBlank() ||
+                                            state.moisture.toFloatOrNull() == null ||
+                                            (state.moisture.toFloatOrNull() ?: 0f) > 12.5f ||
+                                            (state.moisture.toFloatOrNull() ?: 0f) < 0f -> moistureBringIntoView
+                                    else -> dirtBringIntoView
+                                }
+                                coroutineScope.launch {
+                                    targetRequester.bringIntoView()
+                                }
+                                return@Button
+                            }
+
                             vm.saveSample { id ->
                                 onNextToScan(id)
                             }
                         },
-                        enabled = vm.isFormValid(),
                         modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(containerColor = CardBorderColor)
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (isFormValid) {
+                                CardBorderColor
+                            } else {
+                                CardBorderColor.copy(alpha = 0.38f)
+                            },
+                            contentColor = Color.White
+                        )
                     ) {
                         Text("Lanjut ke Scan")
                     }
