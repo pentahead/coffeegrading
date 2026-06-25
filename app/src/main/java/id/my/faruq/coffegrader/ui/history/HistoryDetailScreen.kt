@@ -258,7 +258,7 @@ fun HistoryDetailScreen(
                                     .padding(12.dp),
                                 verticalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
-                                InfoRow("Batch ID Sampel", sample.batchId)
+                                InfoRow("Batch ID Sampel",  currentBatchName)
                                 InfoRow("Jenis Kopi", sample.coffeeType)
                                 InfoRow("Metode Pengolahan", sample.processingMethod)
                                 InfoRow("Ukuran Biji", sample.beanSize)
@@ -293,10 +293,10 @@ fun HistoryDetailScreen(
                                 .padding(12.dp),
                             verticalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            InfoRow("Batch ID", safeDetail.sampleInfo?.batchId ?: currentBatchName)
+                            InfoRow("Batch ID", currentBatchName)
                             InfoRow("Waktu", "${safeDetail.timeText} WIB")
                             InfoRow("Tanggal", safeDetail.dateText)
-                            InfoRow("Mutu Biji", " ${safeDetail.gradeText}")
+                            InfoRow("Mutu Biji", "${safeDetail.gradeText}")
                             InfoRow("Total Biji", safeDetail.totalBeans.toString())
                             InfoRow("Jumlah Biji Cacat", safeDetail.defectiveBeans.toString())
                             InfoRow("Nilai Cacat", safeDetail.defectScoreTotal.toString())
