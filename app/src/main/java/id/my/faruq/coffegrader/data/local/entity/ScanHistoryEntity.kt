@@ -34,5 +34,8 @@ data class ScanHistoryEntity(
     val sampleInfoId: Long? = null,
 
     // Durasi proses scan (ms) - untuk ditampilkan di detail riwayat
-    val scanDurationMs: Long = 0L
+    val scanDurationMs: Long = 0L,
+
+    // Rata-rata confidence score seluruh deteksi (0.0–1.0)
+    val confidenceScoreTotal: Double = 0.0,
 )

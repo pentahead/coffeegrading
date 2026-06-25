@@ -50,10 +50,14 @@ object DefectAggregator {
         // Sort: kontribusi total terbesar di atas (jumlah × bobot)
         rows.sortByDescending { it.defectValue * it.count }
 
+        val avgConfidence = if (detections.isEmpty()) 0.0
+            else detections.map { it.score.toDouble() }.average()
+
         return AggregatedDefects(
-            totalScore = totalScore,
-            totalBeans = detections.size,
-            rows       = rows,
+            totalScore      = totalScore,
+            totalBeans      = detections.size,
+            rows            = rows,
+            totalConfidence = avgConfidence,
         )
     }
 

@@ -21,6 +21,7 @@ class ScanRepository @Inject constructor(
         defectScore: Double,
         gradeText: String,
         scanDurationMs: Long,
+        confidenceScoreTotal: Double = 0.0,
         defects: List<ScanDefectEntity>,
         sampleInfoId: Long? = null,
         imagePath: String? = null,
@@ -38,7 +39,8 @@ class ScanRepository @Inject constructor(
                 imagePath = imagePath,
                 thumbnailPath = thumbnailPath,
                 sampleInfoId = sampleInfoId,
-                scanDurationMs = scanDurationMs
+                scanDurationMs = scanDurationMs,
+                confidenceScoreTotal = confidenceScoreTotal,
             )
         )
 

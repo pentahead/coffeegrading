@@ -301,7 +301,11 @@ fun HistoryDetailScreen(
                             InfoRow("Jumlah Biji Cacat", safeDetail.defectiveBeans.toString())
                             InfoRow("Nilai Cacat", safeDetail.defectScoreTotal.toString())
                             InfoRow("Cacat Dominan", safeDetail.dominantDefect)
-                            InfoRow("Durasi Scan", "${safeDetail.scanDurationMs} ms")
+                            InfoRow("Waktu Inferensi", "${safeDetail.scanDurationMs} ms")
+                            InfoRow(
+                                "Confidence Score",
+                                "${"%.1f".format(safeDetail.confidenceScoreTotal * 100)}%"
+                            )
                             InfoRow("Petugas", safeDetail.officerName)
                         }
                     }

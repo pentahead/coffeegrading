@@ -38,9 +38,11 @@ data class InferenceOutput(
 )
 
 data class AggregatedDefects(
-    val totalScore : Double,
-    val totalBeans : Int,
-    val rows       : List<DefectRow>,
+    val totalScore       : Double,
+    val totalBeans       : Int,
+    val rows             : List<DefectRow>,
+    /** Rata-rata confidence score seluruh deteksi (0.0–1.0). */
+    val totalConfidence  : Double = 0.0,
 )
 
 data class DefectRow(
