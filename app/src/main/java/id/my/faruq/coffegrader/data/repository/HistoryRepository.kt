@@ -139,7 +139,7 @@ class HistoryRepository @Inject constructor(
                         dominantDefect = "-",
                         scanDurationMs = entity.scanDurationMs,
                         confidenceScoreTotal = entity.confidenceScoreTotal,
-                        officerName = "-",
+                        officerName = "Petugas 1",
                         defects = emptyList(),
                         sampleInfo = sample?.toSampleInfoUi(),
                         imagePath = entity.imagePath

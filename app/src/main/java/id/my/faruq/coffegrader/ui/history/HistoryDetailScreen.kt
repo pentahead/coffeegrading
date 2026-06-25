@@ -296,7 +296,7 @@ fun HistoryDetailScreen(
                             InfoRow("Batch ID", safeDetail.sampleInfo?.batchId ?: currentBatchName)
                             InfoRow("Waktu", "${safeDetail.timeText} WIB")
                             InfoRow("Tanggal", safeDetail.dateText)
-                            InfoRow("Mutu Biji", "Mutu ${safeDetail.gradeText}")
+                            InfoRow("Mutu Biji", " ${safeDetail.gradeText}")
                             InfoRow("Total Biji", safeDetail.totalBeans.toString())
                             InfoRow("Jumlah Biji Cacat", safeDetail.defectiveBeans.toString())
                             InfoRow("Nilai Cacat", safeDetail.defectScoreTotal.toString())
