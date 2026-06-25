@@ -232,7 +232,10 @@ fun CameraScreen(
 
             if (capturedBitmap == null && hasPermission) {
                 Row(
-                    modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 32.dp),
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .navigationBarsPadding()
+                        .padding(bottom = 32.dp),
                     horizontalArrangement = Arrangement.spacedBy(24.dp),
                     verticalAlignment     = Alignment.CenterVertically,
                 ) {
@@ -328,6 +331,7 @@ fun CameraScreen(
                 Row(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
+                        .navigationBarsPadding()
                         .padding(start = 16.dp, end = 16.dp, bottom = 32.dp),
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalAlignment     = Alignment.CenterVertically,

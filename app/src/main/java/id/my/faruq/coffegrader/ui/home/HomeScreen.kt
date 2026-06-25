@@ -83,6 +83,7 @@ fun HomeScreen(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .statusBarsPadding()
                     .height(210.dp)
                     .background(Color(0xFFB7F23A))
                     .padding(top =  20.dp, end = 16.dp, start = 16.dp, bottom = 0.dp)
@@ -519,6 +520,7 @@ private fun HomeBottomBar(
     Box(
         modifier = Modifier
             .fillMaxWidth()
+            .navigationBarsPadding()
             .padding(horizontal = 16.dp, vertical = 20.dp),
         contentAlignment = Alignment.BottomCenter
     ) {
