@@ -7,6 +7,7 @@ import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
@@ -16,6 +17,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 
@@ -208,7 +210,8 @@ fun SampleInputScreen(
                         placeholder = "Masukkan kadar air",
                         modifier = Modifier.bringIntoViewRequester(moistureBringIntoView),
                         isError = moistureError != null,
-                        errorText = moistureError
+                        errorText = moistureError,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
                     )
 
                     SampleLabeledTextField(
@@ -221,7 +224,8 @@ fun SampleInputScreen(
                         placeholder = "Masukkan kadar kotoran",
                         modifier = Modifier.bringIntoViewRequester(dirtBringIntoView),
                         isError = dirtError != null,
-                        errorText = dirtError
+                        errorText = dirtError,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
                     )
 
                     Spacer(Modifier.height(8.dp))

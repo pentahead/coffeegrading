@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
@@ -77,7 +78,8 @@ fun SampleLabeledTextField(
     placeholder: String,
     modifier: Modifier = Modifier,
     isError: Boolean = false,
-    errorText: String? = null
+    errorText: String? = null,
+    keyboardOptions: KeyboardOptions = KeyboardOptions.Default
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
@@ -105,6 +107,7 @@ fun SampleLabeledTextField(
                 interactionSource = interactionSource,
                 isError = isError,
                 shape = SampleFieldShape,
+                keyboardOptions = keyboardOptions,
                 colors = sampleTransparentOutlineColors()
             )
         }
