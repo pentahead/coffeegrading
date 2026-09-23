@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Logo Coffee Grader: lingkaran hijau #bef33f dengan ikon kopi -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Lingkaran hijau (sesuai logosplash Figma) -->
+    <path
+        android:fillColor="#bef33f"
+        android:pathData="M54,54m-40,0a40,40 0,1 1,80 0a40,40 0,1 1,-80 0" />
+    <!-- Ikon cangkir kopi sederhana (putih) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,38c-8.3,0 -15,6.7 -15,15v8c0,4.4 3.6,8 8,8h14c4.4,0 8,-3.6 8,-8v-8C69,44.7 62.3,38 54,38zM48,53c0,-3.3 2.7,-6 6,-6s6,2.7 6,6v5h-12V53z"
+        android:strokeWidth="0"
+        android:strokeColor="#00000000" />
+</vector>
